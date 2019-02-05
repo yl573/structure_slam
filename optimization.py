@@ -137,7 +137,6 @@ class LocalBA(object):
     def update_poses(self):
         for keyframe in self.keyframes:
             keyframe.update_pose(self.optimizer.get_pose(keyframe.id))
-            # keyframe.update_reference()
             keyframe.update_preceding()
 
     def get_bad_measurements(self):
@@ -223,12 +222,6 @@ class PoseGraphOptimization(g2o.SparseOptimizer):
                 self.add_edge(
                     vertices=(kf.preceding_keyframe.id, kf.id),
                     measurement=kf.preceding_constraint)
-
-            # if (kf.reference_keyframe is not None and
-            #     kf.reference_keyframe != kf.preceding_keyframe):
-            #     self.add_edge(
-            #         vertices=(kf.reference_keyframe.id, kf.id),
-            #         measurement=kf.reference_constraint)
         
         for kf, kf2, meas in loops:
             self.add_edge((kf.id, kf2.id), measurement=meas)

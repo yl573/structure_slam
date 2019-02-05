@@ -96,9 +96,7 @@ class MapViewer(object):
 
         lines = []
         for kf in self.system.graph.keyframes():
-            if kf.reference_keyframe is not None:
-                lines.append(([*kf.position, *kf.reference_keyframe.position], 0))
-            if kf.preceding_keyframe != kf.reference_keyframe:
+            if kf.preceding_keyframe:
                 lines.append(([*kf.position, *kf.preceding_keyframe.position], 1))
             if kf.loop_keyframe is not None:
                 lines.append(([*kf.position, *kf.loop_keyframe.position], 2))

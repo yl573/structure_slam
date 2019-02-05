@@ -10,7 +10,6 @@ from mapping import Mapping
 from mapping import MappingThread
 from frame import Measurement
 from motion import MotionModel
-from loopclosing import LoopClosing
 from frame import StereoFrame
 from feature import ImageFeature
 import g2o
@@ -25,9 +24,6 @@ class Tracker(object):
 
         self.graph = CovisibilityGraph()
         self.mapping = MappingThread(self.graph, params)
-
-        self.loop_closing = LoopClosing(self, params)
-        self.loop_correction = None
         
         self.preceding = None        # last keyframe
         self.current = None          # current frame
@@ -39,8 +35,6 @@ class Tracker(object):
         
     def stop(self):
         self.mapping.stop()
-        if self.loop_closing is not None:
-            self.loop_closing.stop()
 
     def initialize(self, frame):
         mappoints, measurements = frame.triangulate()
@@ -51,8 +45,6 @@ class Tracker(object):
         keyframe.set_fixed(True)
         self.graph.add_keyframe(keyframe)
         self.mapping.add_measurements(keyframe, mappoints, measurements)
-        if self.loop_closing is not None:
-            self.loop_closing.add_keyframe(keyframe)
 
         self.preceding = keyframe
         self.current = keyframe
@@ -100,20 +92,8 @@ class Tracker(object):
         
         frame.update_pose(predicted_pose)
 
-        if self.loop_closing is not None:
-            if self.loop_correction is not None:
-                estimated_pose = g2o.Isometry3d(
-                    frame.orientation,
-                    frame.position)
-                estimated_pose = estimated_pose * self.loop_correction
-                frame.update_pose(estimated_pose)
-                self.motion_model.apply_correction(self.loop_correction)
-                self.loop_correction = None
-
         local_mappoints = self.get_local_map_points(frame)
         measurements = frame.match_mappoints(local_mappoints, Measurement.Source.TRACKING)
-
-        # print('measurements:', len(measurements), '   ', len(local_mappoints))
 
         tracked_map = set()
         for m in measurements:
@@ -136,8 +116,6 @@ class Tracker(object):
             keyframe.update_preceding(self.preceding)
 
             self.mapping.add_keyframe(keyframe, measurements)
-            if self.loop_closing is not None:
-                self.loop_closing.add_keyframe(keyframe)
             self.preceding = keyframe
 
         self.set_tracking(False)
@@ -147,12 +125,11 @@ class Tracker(object):
         filtered = []
 
         # Add in map points from preceding and reference
-        for reference in set([self.preceding]):
-            for pt in reference.mappoints():  # neglect can_view test
-                if pt in checked or pt.is_bad():
-                    continue
-                pt.increase_projection_count()
-                filtered.append(pt)
+        for pt in self.preceding.mappoints():  # neglect can_view test
+            if pt in checked or pt.is_bad():
+                continue
+            pt.increase_projection_count()
+            filtered.append(pt)
 
         return filtered
 
@@ -164,14 +141,9 @@ class Tracker(object):
         n_matches = len(measurements)
         n_matches_ref = len(self.preceding.measurements())
 
-        # print('keyframe check:', n_matches, '   ', n_matches_ref)
-
         return ((n_matches / n_matches_ref) < 
             self.params.min_tracked_points_ratio) or n_matches < 20
 
-
-    def set_loop_correction(self, T):
-        self.loop_correction = T
 
     def is_initialized(self):
         return self.status['initialized']
