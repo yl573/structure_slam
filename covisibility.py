@@ -206,7 +206,7 @@ class CovisibilityGraph(object):
 
         return local_map, local_keyframes
 
-    def get_local_map_v2(self, seedframes, window_size=12, loop_window_size=8):
+    def get_local_map_v2(self, seedframes, window_size=1, loop_window_size=1):
         covisible = []
         for kf in set(seedframes):
             covisible.append(Counter(kf.covisibility_keyframes()))
@@ -242,4 +242,5 @@ class CovisibilityGraph(object):
             local_map.append(kf.mappoints())
             local_keyframes.append(kf)
         local_map = list(set(chain(*local_map)))
+        print(len(local_map), len(local_keyframes))
         return local_map, local_keyframes

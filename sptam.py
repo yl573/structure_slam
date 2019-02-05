@@ -88,6 +88,7 @@ class SPTAM(object):
         print('Tracking:', frame.idx, ' <- ', self.reference.id, self.reference.idx)
 
         predicted_pose, _ = self.motion_model.predict_pose(frame.timestamp)
+        
         frame.update_pose(predicted_pose)
 
         if self.loop_closing is not None:
@@ -254,17 +255,14 @@ if __name__ == '__main__':
         from viewer import MapViewer
         viewer = MapViewer(sptam, params)
 
-
     cam = Camera(
         dataset.cam.fx, dataset.cam.fy, dataset.cam.cx, dataset.cam.cy, 
         dataset.cam.width, dataset.cam.height, 
         params.frustum_near, params.frustum_far, 
         dataset.cam.baseline)
 
-
-
     durations = []
-    for i in range(len(dataset))[:100]:
+    for i in range(len(dataset)):
         featurel = ImageFeature(dataset.left[i], params)
         featurer = ImageFeature(dataset.right[i], params)
         timestamp = dataset.timestamps[i]
@@ -296,7 +294,6 @@ if __name__ == '__main__':
     print('num frames', len(durations))
     print('num keyframes', len(sptam.graph.keyframes()))
     print('average time', np.mean(durations))
-
 
     sptam.stop()
     if visualize:

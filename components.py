@@ -40,7 +40,6 @@ class Camera(object):
         return g2o.Isometry3d(pose.orientation(), pos)
 
 
-
 class Frame(object):
     def __init__(self, idx, pose, feature, cam, timestamp=None, 
             pose_covariance=np.identity(6)):
@@ -54,10 +53,10 @@ class Frame(object):
         self.orientation = pose.orientation()
         self.position = pose.position()
         self.pose_covariance = pose_covariance
-
         self.transform_matrix = pose.inverse().matrix()[:3] # shape: (3, 4)
         self.projection_matrix = (
             self.cam.intrinsic.dot(self.transform_matrix))  # from world frame to image
+        
 
     # batch version
     def can_view(self, points, ground=False, margin=20):    # Frustum Culling
@@ -168,6 +167,7 @@ class StereoFrame(Frame):
 
         measurements = []
         for i, j in matches_left.items():
+            # if match in both left and right
             if i in matches_right:
                 j2 = matches_right[i]
 
@@ -186,6 +186,7 @@ class StereoFrame(Frame):
                 measurements.append((i, meas))
                 self.left.set_matched(j)
                 self.right.set_matched(j2)
+            # if only left is matched
             else:
                 meas = Measurement(
                     Measurement.Type.LEFT,
@@ -196,6 +197,7 @@ class StereoFrame(Frame):
                 self.left.set_matched(j)
 
         for i, j in matches_right.items():
+            # if only right is matched
             if i not in matches_left:
                 meas = Measurement(
                     Measurement.Type.RIGHT,
@@ -264,6 +266,8 @@ class StereoFrame(Frame):
         can_view = np.logical_and(
             self.left.can_view(points), 
             self.right.can_view(points))
+
+        print(f'{np.sum(can_view)} can view, {len(can_view)} total')
 
         mappoints = []
         matchs = []

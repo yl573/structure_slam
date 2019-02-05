@@ -288,7 +288,6 @@ class MapViewer(object):
                  # easily draw millions of points
                 pangolin.DrawPoints(mappoints.array(), colors.array())
 
-
                 if not self.q_active.empty():
                     active = self.q_active.get()
 
