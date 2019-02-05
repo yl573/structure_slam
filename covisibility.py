@@ -242,5 +242,4 @@ class CovisibilityGraph(object):
             local_map.append(kf.mappoints())
             local_keyframes.append(kf)
         local_map = list(set(chain(*local_map)))
-        print(len(local_map), len(local_keyframes))
         return local_map, local_keyframes

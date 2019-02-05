@@ -267,8 +267,6 @@ class StereoFrame(Frame):
             self.left.can_view(points), 
             self.right.can_view(points))
 
-        print(f'{np.sum(can_view)} can view, {len(can_view)} total')
-
         mappoints = []
         matchs = []
         for i, point in enumerate(points):
