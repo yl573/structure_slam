@@ -13,33 +13,6 @@ from covisibility import GraphMapPoint
 from covisibility import GraphMeasurement
 
 
-
-
-class Camera(object):
-    def __init__(self, fx, fy, cx, cy, width, height, 
-            frustum_near, frustum_far, baseline):
-        self.fx = fx
-        self.fy = fy
-        self.cx = cx
-        self.cy = cy
-        self.baseline = baseline
-
-        self.intrinsic = np.array([
-            [fx, 0, cx], 
-            [0, fy, cy], 
-            [0, 0, 1]])
-
-        self.frustum_near = frustum_near
-        self.frustum_far = frustum_far
-
-        self.width = width
-        self.height = height
-        
-    def compute_right_camera_pose(self, pose):
-        pos = pose * np.array([self.baseline, 0, 0])
-        return g2o.Isometry3d(pose.orientation(), pos)
-
-
 class Frame(object):
     def __init__(self, idx, pose, feature, cam, timestamp=None, 
             pose_covariance=np.identity(6)):
@@ -340,11 +313,11 @@ class KeyFrame(GraphKeyFrame, StereoFrame):
         self.loop_constraint = None
         self.fixed = False
 
-    def update_reference(self, reference=None):
-        if reference is not None:
-            self.reference_keyframe = reference
-        self.reference_constraint = (
-            self.reference_keyframe.pose.inverse() * self.pose)
+    # def update_reference(self, reference=None):
+    #     if reference is not None:
+    #         self.reference_keyframe = reference
+    #     self.reference_constraint = (
+    #         self.reference_keyframe.pose.inverse() * self.pose)
 
     def update_preceding(self, preceding=None):
         if preceding is not None:

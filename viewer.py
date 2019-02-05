@@ -89,7 +89,7 @@ class MapViewer(object):
         self.q_pose.put(self.system.current.pose.matrix())
 
         points = []
-        for m in self.system.reference.measurements():
+        for m in self.system.preceding.measurements():
             if m.from_triangulation():
                 points.append(m.mappoint.position) 
         self.q_active.put(points)

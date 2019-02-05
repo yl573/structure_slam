@@ -11,7 +11,7 @@ from queue import Queue
 from collections import defaultdict, namedtuple
 
 from optimization import PoseGraphOptimization
-from components import Measurement
+from frame import Measurement
 
 
 

@@ -8,7 +8,7 @@ from covisibility import CovisibilityGraph
 from optimization import BundleAdjustment
 from mapping import Mapping
 from mapping import MappingThread
-from components import Measurement
+from frame import Measurement
 from motion import MotionModel
 from loopclosing import LoopClosing
 
@@ -226,8 +226,8 @@ if __name__ == '__main__':
 
     from threading import Thread
     
-    from components import Camera
-    from components import StereoFrame
+    from frame import Camera
+    from frame import StereoFrame
     from feature import ImageFeature
     from params import ParamsKITTI, ParamsEuroc
     from dataset import KITTIOdometry, EuRoCDataset

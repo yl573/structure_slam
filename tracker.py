@@ -8,10 +8,10 @@ from covisibility import CovisibilityGraph
 from optimization import BundleAdjustment
 from mapping import Mapping
 from mapping import MappingThread
-from components import Measurement
+from frame import Measurement
 from motion import MotionModel
 from loopclosing import LoopClosing
-from components import StereoFrame
+from frame import StereoFrame
 from feature import ImageFeature
 import g2o
 
@@ -29,7 +29,6 @@ class Tracker(object):
         self.loop_closing = LoopClosing(self, params)
         self.loop_correction = None
         
-        self.reference = None        # reference keyframe
         self.preceding = None        # last keyframe
         self.current = None          # current frame
         self.status = defaultdict(bool)
@@ -55,7 +54,6 @@ class Tracker(object):
         if self.loop_closing is not None:
             self.loop_closing.add_keyframe(keyframe)
 
-        self.reference = keyframe
         self.preceding = keyframe
         self.current = keyframe
         self.status['initialized'] = True
@@ -97,7 +95,6 @@ class Tracker(object):
             return
 
         self.current = frame
-        # print('Tracking:', frame.idx, ' <- ', self.reference.id, self.reference.idx)
 
         predicted_pose, _ = self.motion_model.predict_pose(frame.timestamp)
         
@@ -113,9 +110,8 @@ class Tracker(object):
                 self.motion_model.apply_correction(self.loop_correction)
                 self.loop_correction = None
 
-        local_mappoints = self.filter_points(frame)
-        measurements = frame.match_mappoints(
-            local_mappoints, Measurement.Source.TRACKING)
+        local_mappoints = self.get_local_map_points(frame)
+        measurements = frame.match_mappoints(local_mappoints, Measurement.Source.TRACKING)
 
         # print('measurements:', len(measurements), '   ', len(local_mappoints))
 
@@ -127,21 +123,16 @@ class Tracker(object):
             tracked_map.add(mappoint)
         
         try:
-            self.reference = self.graph.get_reference_frame(tracked_map)
-
             pose = self.refine_pose(frame.pose, self.cam, measurements)
             frame.update_pose(pose)
-            self.motion_model.update_pose(
-                frame.timestamp, pose.position(), pose.orientation())
+            self.motion_model.update_pose(frame.timestamp, pose.position(), pose.orientation())
             tracking_is_ok = True
         except:
             tracking_is_ok = False
             print('tracking failed!!!')
 
         if tracking_is_ok and self.should_be_keyframe(frame, measurements):
-            print('new keyframe')
             keyframe = frame.to_keyframe()
-            keyframe.update_reference(self.reference)
             keyframe.update_preceding(self.preceding)
 
             self.mapping.add_keyframe(keyframe, measurements)
@@ -151,27 +142,12 @@ class Tracker(object):
 
         self.set_tracking(False)
 
-
-    def filter_points(self, frame):
-        local_mappoints = self.graph.get_local_map_v2(
-            [self.preceding, self.reference])[0]
-
-        can_view = frame.can_view(local_mappoints)
-        # print('filter points:', len(local_mappoints), can_view.sum(), 
-            # len(self.preceding.mappoints()),
-            # len(self.reference.mappoints()))
-        
+    def get_local_map_points(self, frame):
         checked = set()
         filtered = []
-        for i in np.where(can_view)[0]:
-            pt = local_mappoints[i]
-            if pt.is_bad():
-                continue
-            pt.increase_projection_count()
-            filtered.append(pt)
-            checked.add(pt)
 
-        for reference in set([self.preceding, self.reference]):
+        # Add in map points from preceding and reference
+        for reference in set([self.preceding]):
             for pt in reference.mappoints():  # neglect can_view test
                 if pt in checked or pt.is_bad():
                     continue
@@ -186,7 +162,7 @@ class Tracker(object):
             return False
 
         n_matches = len(measurements)
-        n_matches_ref = len(self.reference.measurements())
+        n_matches_ref = len(self.preceding.measurements())
 
         # print('keyframe check:', n_matches, '   ', n_matches_ref)
 
