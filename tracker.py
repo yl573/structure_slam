@@ -4,7 +4,7 @@ import time
 from itertools import chain
 from collections import defaultdict
 
-from covisibility import Map
+from mapping import Map
 from optimization import BundleAdjustment
 from frame import Measurement
 from motion import MotionModel

@@ -36,13 +36,6 @@ class ImageFeature(object):
 
         self.unmatched = np.ones(len(self.keypoints), dtype=bool)
 
-    def draw_keypoints(self, name='keypoints', delay=1):
-        if self.image.ndim == 2:
-            image = np.repeat(self.image[..., np.newaxis], 3, axis=2)
-        else:
-            image = self.image
-        img = cv2.drawKeypoints(image, self.keypoints, None, flags=0)
-        cv2.imshow(name, img);cv2.waitKey(delay)
 
     def find_matches(self, predictions, descriptors):
         matches = dict()
