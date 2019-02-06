@@ -7,6 +7,7 @@ from queue import Queue
 
 from enum import Enum
 from collections import defaultdict
+from numbers import Number
 
 
 class Frame(object):
@@ -16,7 +17,7 @@ class Frame(object):
         self.feature = feature
         self.cam = cam
         self.timestamp = timestamp
-        self.image = feature.image
+        
 
         self.orientation = pose.orientation()
         self.position = pose.position()
@@ -24,6 +25,8 @@ class Frame(object):
         self.projection_matrix = (
             self.cam.intrinsic.dot(self.transform_matrix))  # from world frame to image
 
+        self.image = self.feature.image
+        self.height, self.width = self.image.shape[:2]
         self.keypoints = self.feature.keypoints
         self.descriptors = self.feature.descriptors
 
@@ -105,12 +108,15 @@ class Frame(object):
         return self.descriptors[i]
 
     def get_color(self, pt):
-        return self.feature.get_color(pt)
+        x = int(np.clip(pt[0], 0, self.width-1))
+        y = int(np.clip(pt[1], 0, self.height-1))
+        color = self.image[y, x]
+        if isinstance(color, Number):
+            color = np.array([color, color, color])
+        return color[::-1] / 255.
 
     def get_unmatched_keypoints(self):
-        return self.feature.get_unmatched_keypoints()
-
-        
+        return self.keypoints, self.descriptors, list(range(len(self.keypoints)))
 
 
 class StereoFrame(Frame):
