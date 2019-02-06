@@ -11,7 +11,7 @@ from numbers import Number
 
 
 class Frame(object):
-    def __init__(self, idx, pose, feature, cam, params, image, timestamp=None):
+    def __init__(self, idx, pose, cam, params, image, timestamp=None):
         self.idx = idx
         self.pose = pose    # g2o.Isometry3d
         self.cam = cam
@@ -34,7 +34,6 @@ class Frame(object):
         self.projection_matrix = (
             self.cam.intrinsic.dot(self.transform_matrix))  # from world frame to image
 
-        self.feature = None
         self.image = image
         self.height, self.width = self.image.shape[:2]
 
@@ -161,14 +160,14 @@ class Frame(object):
 
 
 class StereoFrame(Frame):
-    def __init__(self, idx, pose, feature, right_feature, cam, params, img_left, img_right,
+    def __init__(self, idx, pose, cam, params, img_left, img_right,
                  right_cam=None, timestamp=None):
 
-        super().__init__(idx, pose, feature, cam, params, img_left, timestamp)
-        self.left = Frame(idx, pose, feature, cam, params, img_left, timestamp)
+        super().__init__(idx, pose, cam, params, img_left, timestamp)
+        self.left = Frame(idx, pose, cam, params, img_left, timestamp)
         self.right = Frame(idx,
                            cam.compute_right_camera_pose(pose),
-                           right_feature, right_cam or cam,
+                           right_cam or cam,
                            params, img_right, timestamp)
 
 
@@ -331,7 +330,6 @@ class StereoFrame(Frame):
     def to_keyframe(self):
         return KeyFrame(
             self.idx, self.pose,
-            self.left.feature, self.right.feature,
             self.cam, self.params, self.left.image, self.right.image, self.right.cam)
 
 
