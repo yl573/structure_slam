@@ -14,7 +14,6 @@ class Frame(object):
     def __init__(self, idx, pose, feature, cam, timestamp=None):
         self.idx = idx
         self.pose = pose    # g2o.Isometry3d
-        self.feature = feature
         self.cam = cam
         self.timestamp = timestamp
         
@@ -25,10 +24,14 @@ class Frame(object):
         self.projection_matrix = (
             self.cam.intrinsic.dot(self.transform_matrix))  # from world frame to image
 
+        self.feature = feature
         self.image = self.feature.image
         self.height, self.width = self.image.shape[:2]
         self.keypoints = self.feature.keypoints
         self.descriptors = self.feature.descriptors
+        self.distance = self.feature.distance
+        self.neighborhood = self.feature.neighborhood
+        self.matcher = self.feature.matcher
 
     # batch version
 
@@ -104,21 +107,31 @@ class Frame(object):
     def find_matches_feature(self, predictions, descriptors):
         matches = dict()
         distances = defaultdict(lambda: float('inf'))
-        for m, query_idx, train_idx in self.feature.matched_by(descriptors):
-            if m.distance > min(distances[train_idx], self.feature.distance):
+        for m, query_idx, train_idx in self.matched_by(descriptors):
+            if m.distance > min(distances[train_idx], self.distance):
                 continue
 
             pt1 = predictions[query_idx]
             pt2 = self.keypoints[train_idx].pt
             dx = pt1[0] - pt2[0]
             dy = pt1[1] - pt2[1]
-            if np.sqrt(dx*dx + dy*dy) > self.feature.neighborhood:
+            if np.sqrt(dx*dx + dy*dy) > self.neighborhood:
                 continue
 
             matches[train_idx] = query_idx
             distances[train_idx] = m.distance
         matches = [(i, j) for j, i in matches.items()]
         return matches
+
+    def matched_by(self, descriptors):
+        unmatched_descriptors = self.descriptors
+        if len(unmatched_descriptors) == 0:
+            return []
+
+        # TODO: reduce matched points by using predicted position
+        matches = self.matcher.match(
+            np.array(descriptors), unmatched_descriptors)
+        return [(m, m.queryIdx, m.trainIdx) for m in matches]
 
     def get_keypoint(self, i):
         return self.keypoints[i]
@@ -225,8 +238,24 @@ class StereoFrame(Frame):
 
         return mappoints, measurements
 
+    def row_match(self, kps1, desps1, kps2, desps2,
+            matching_distance=40, 
+            max_row_distance=2.5, 
+            max_disparity=100):
+
+        matches = self.matcher.match(np.array(desps1), np.array(desps2))
+        good = []
+        for m in matches:
+            pt1 = kps1[m.queryIdx].pt
+            pt2 = kps2[m.trainIdx].pt
+            if (m.distance < matching_distance and 
+                abs(pt1[1] - pt2[1]) < max_row_distance and 
+                abs(pt1[0] - pt2[0]) < max_disparity):   # epipolar constraint
+                good.append(m)
+        return good
+
     def triangulate_points(self, kps_left, desps_left, kps_right, desps_right):
-        matches = self.feature.row_match(
+        matches = self.row_match(
             kps_left, desps_left, kps_right, desps_right)
         assert len(matches) > 0
 
