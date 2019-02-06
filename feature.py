@@ -26,5 +26,3 @@ class ImageFeature(object):
         self.distance = params.matching_distance
         self.neighborhood = (
             params.matching_cell_size * params.matching_neighborhood)
-
-        self._lock = Lock()
