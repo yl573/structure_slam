@@ -10,8 +10,7 @@ from collections import defaultdict
 
 
 class Frame(object):
-    def __init__(self, idx, pose, feature, cam, timestamp=None,
-                 pose_covariance=np.identity(6)):
+    def __init__(self, idx, pose, feature, cam, timestamp=None):
         self.idx = idx
         self.pose = pose    # g2o.Isometry3d
         self.feature = feature
@@ -21,7 +20,6 @@ class Frame(object):
 
         self.orientation = pose.orientation()
         self.position = pose.position()
-        self.pose_covariance = pose_covariance
         self.transform_matrix = pose.inverse().matrix()[:3]  # shape: (3, 4)
         self.projection_matrix = (
             self.cam.intrinsic.dot(self.transform_matrix))  # from world frame to image
@@ -117,14 +115,14 @@ class Frame(object):
 
 class StereoFrame(Frame):
     def __init__(self, idx, pose, feature, right_feature, cam,
-                 right_cam=None, timestamp=None, pose_covariance=np.identity(6)):
+                 right_cam=None, timestamp=None):
 
-        super().__init__(idx, pose, feature, cam, timestamp, pose_covariance)
-        self.left = Frame(idx, pose, feature, cam, timestamp, pose_covariance)
+        super().__init__(idx, pose, feature, cam, timestamp)
+        self.left = Frame(idx, pose, feature, cam, timestamp)
         self.right = Frame(idx,
                            cam.compute_right_camera_pose(pose),
                            right_feature, right_cam or cam,
-                           timestamp, pose_covariance)
+                           timestamp)
 
 
     def match_mappoints(self, mappoints, source):
@@ -277,8 +275,7 @@ class StereoFrame(Frame):
         return KeyFrame(
             self.idx, self.pose,
             self.left.feature, self.right.feature,
-            self.cam, self.right.cam,
-            self.pose_covariance)
+            self.cam, self.right.cam)
 
 
 class KeyFrame(StereoFrame):
