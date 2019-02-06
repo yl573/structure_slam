@@ -24,6 +24,9 @@ class Frame(object):
         self.projection_matrix = (
             self.cam.intrinsic.dot(self.transform_matrix))  # from world frame to image
 
+        self.keypoints = self.feature.keypoints
+        self.descriptors = self.feature.descriptors
+
     # batch version
 
     def can_view(self, points, ground=False, margin=20):    # Frustum Culling
@@ -96,16 +99,13 @@ class Frame(object):
         return self.feature.find_matches(proj, descriptors)
 
     def get_keypoint(self, i):
-        return self.feature.get_keypoint(i)
+        return self.keypoints[i]
 
     def get_descriptor(self, i):
-        return self.feature.get_descriptor(i)
+        return self.descriptors[i]
 
     def get_color(self, pt):
         return self.feature.get_color(pt)
-
-    # def set_matched(self, i):
-    #     self.feature.set_matched(i)
 
     def get_unmatched_keypoints(self):
         return self.feature.get_unmatched_keypoints()
