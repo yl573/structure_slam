@@ -133,17 +133,13 @@ class MappingThread(Mapping):
     def __init__(self, graph, params):
         super().__init__(graph, params)
 
-        self._requests_cv = Condition()
-        self._requests = [False, False]   # requests: [LOCKWINDOW_REQUEST, PROCESS_REQUEST]
+        # self._requests_cv = Condition()
+        # self._requests = [False, False]   # requests: [LOCKWINDOW_REQUEST, PROCESS_REQUEST]
 
-        self._lock = Lock()
-        self.locked_window = set()
-        self.status = defaultdict(bool)
+        # self._lock = Lock()
+        # self.locked_window = set()
+        # self.status = defaultdict(bool)
         
-        self._queue = Queue()
-        self.maintenance_thread = Thread(target=self.maintenance)
-        self.maintenance_thread.start()
-
     def add_keyframe(self, keyframe, measurements): 
         self.graph.add_keyframe(keyframe)
 
@@ -151,107 +147,58 @@ class MappingThread(Mapping):
         for m in measurements:
             self.graph.add_measurement(keyframe, m.mappoint, m)
 
-        self._queue.put(keyframe)
-        with self._requests_cv:
-            self._requests_cv.notify()
-        
-    def maintenance(self):
-        stopped = False
-        while not stopped:
-            while not self._queue.empty():
-                keyframe = self._queue.get()
-                if keyframe is None:
-                    stopped = True
-                    self._requests[1] = True
-                    break
-                else:
-                    self.local_keyframes.append(keyframe)
-                    if len(self.local_keyframes) >= 5:
-                        self._requests[1] = True
-                        break
-
-            with self._requests_cv:
-                if self._requests.count(True) == 0:
-                    self._requests_cv.wait()
-
-                    while not self._queue.empty():
-                        keyframe = self._queue.get()
-                        if keyframe is None:
-                            stopped = True
-                            self._requests[1] = True
-                            break
-                        else:
-                            self.local_keyframes.append(keyframe)
-                            if len(self.local_keyframes) >= 5:
-                                self._requests[1] = True
-
-                requests = self._requests[:]
-                self._requests[0] = False
-                self._requests[1] = False
-
-            self.status['processing'] = True
-
-            if requests[1] and len(self.local_keyframes) > 0:
-                self.fill(self.local_keyframes, self.local_keyframes[-1])
-
-            if requests[0]:
-                with self._lock:
-                    for kf in self.local_keyframes:
-                        self.locked_window.add(kf)
-                        for ck, n in kf.covisibility_keyframes().items():
-                            if n > 0:
-                                self.locked_window.add(ck)
-                    self.status['window_locked'] = True
-
-            if requests[1] and len(self.local_keyframes) > 0:
-                completed = self.bundle_adjust(self.local_keyframes)
-                if completed:
-                    self.points_culling(self.local_keyframes)
-                self.local_keyframes.clear()
-
-            self.status['processing'] = False
+        # with self._requests_cv:
+        #     self._requests_cv.notify()
 
     def stop(self):
-        with self._requests_cv:
-            self._requests_cv.notify()
+        pass
+        # with self._requests_cv:
+        #     self._requests_cv.notify()
 
-        while not self._queue.empty():
-            time.sleep(1e-4)
-        self._queue.put(None)   # sentinel value
-        self.maintenance_thread.join()
-        print('mapping stopped')
+        # while not self._queue.empty():
+        #     time.sleep(1e-4)
+        # self._queue.put(None)   # sentinel value
+        # self.maintenance_thread.join()
+        # print('mapping stopped')
 
     def is_safe(self, keyframe):
-        with self._lock:
-            return not self.is_window_locked() or keyframe in self.locked_window
+        pass
+        # with self._lock:
+        #     return not self.is_window_locked() or keyframe in self.locked_window
 
     def is_processing(self):
-        return self.status['processing']
+        pass
+        # return self.status['processing']
 
     def lock_window(self):
-        with self._lock:
-            self.status['window_locked'] = False
-            self.locked_window.clear()
+        pass
+    #     with self._lock:
+    #         self.status['window_locked'] = False
+    #         self.locked_window.clear()
 
-        with self._requests_cv:
-            self._requests[0] = True
-            self._requests_cv.notify()
+    #     # with self._requests_cv:
+    #     #     self._requests[0] = True
+    #     #     self._requests_cv.notify()
 
-        while not self.is_window_locked():
-            time.sleep(1e-4)
-        return self.locked_window
+    #     while not self.is_window_locked():
+    #         time.sleep(1e-4)
+    #     return self.locked_window
 
     def free_window(self):
-        with self._lock:
-            self.status['window_locked'] = False
-            self.locked_window.clear()
+        pass
+        # with self._lock:
+        #     self.status['window_locked'] = False
+        #     self.locked_window.clear()
 
     def is_window_locked(self):
-        return self.status['window_locked']
+        pass
+        # return self.status['window_locked']
 
     def wait_until_empty_queue(self):
-        while not self._queue.empty():
-            time.sleep(1e-4)
+        pass
+        # while not self._queue.empty():
+        #     time.sleep(1e-4)
 
     def interrupt_ba(self):
-        self.optimizer.abort()
+        pass
+        # self.optimizer.abort()

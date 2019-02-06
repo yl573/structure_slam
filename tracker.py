@@ -115,6 +115,9 @@ class Tracker(object):
             keyframe = frame.to_keyframe()
             keyframe.update_preceding(self.preceding)
 
+            # mappoints, measurements = keyframe.triangulate()
+            # self.mapping.add_measurements(keyframe, mappoints, measurements)
+
             self.mapping.add_keyframe(keyframe, measurements)
             self.preceding = keyframe
 
