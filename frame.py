@@ -27,8 +27,13 @@ class Frame(object):
         self.feature = feature
         self.image = self.feature.image
         self.height, self.width = self.image.shape[:2]
-        self.keypoints = self.feature.keypoints
-        self.descriptors = self.feature.descriptors
+
+        self.keypoints = self.feature.detector.detect(self.image)
+        self.keypoints, self.descriptors = self.feature.extractor.compute(
+            self.image, self.keypoints)
+
+        # self.keypoints = self.feature.keypoints
+        # self.descriptors = self.feature.descriptors
         self.distance = self.feature.distance
         self.neighborhood = self.feature.neighborhood
         self.matcher = self.feature.matcher

@@ -29,12 +29,12 @@ class ImageFeature(object):
 
         self._lock = Lock()
 
-    def extract(self):
-        self.keypoints = self.detector.detect(self.image)
-        self.keypoints, self.descriptors = self.extractor.compute(
-            self.image, self.keypoints)
+    # def extract(self):
+    #     self.keypoints = self.detector.detect(self.image)
+    #     self.keypoints, self.descriptors = self.extractor.compute(
+    #         self.image, self.keypoints)
 
-        self.unmatched = np.ones(len(self.keypoints), dtype=bool)
+    #     self.unmatched = np.ones(len(self.keypoints), dtype=bool)
 
 
     def find_matches(self, predictions, descriptors):

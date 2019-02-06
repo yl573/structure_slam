@@ -69,9 +69,6 @@ class Tracker(object):
         featurel = ImageFeature(left_img, self.params)
         featurer = ImageFeature(right_img, self.params)
 
-        featurel.extract()
-        featurer.extract()
-
         frame = StereoFrame(i, g2o.Isometry3d(), featurel, featurer, self.cam, timestamp=timestamp)
 
         if i == 0:
