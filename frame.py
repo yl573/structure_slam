@@ -8,9 +8,9 @@ from queue import Queue
 from enum import Enum
 from collections import defaultdict
 
-from covisibility import GraphKeyFrame
+# from covisibility import GraphKeyFrame
 from covisibility import GraphMapPoint
-from covisibility import GraphMeasurement
+# from covisibility import GraphMeasurement
 
 
 class Frame(object):
@@ -293,13 +293,13 @@ class StereoFrame(Frame):
 
 
 
-class KeyFrame(GraphKeyFrame, StereoFrame):
+class KeyFrame(StereoFrame):
     _id = 0
     _id_lock = Lock()
 
     def __init__(self, *args, **kwargs):
-        GraphKeyFrame.__init__(self)
         StereoFrame.__init__(self, *args, **kwargs)
+        self.meas = dict()
 
         with KeyFrame._id_lock:
             self.id = KeyFrame._id
@@ -310,6 +310,15 @@ class KeyFrame(GraphKeyFrame, StereoFrame):
         self.loop_keyframe = None
         self.loop_constraint = None
         self.fixed = False
+
+    def add_measurement(self, m):
+        self.meas[m] = m.mappoint
+
+    def measurements(self):
+        return self.meas.keys()
+
+    def mappoints(self):
+        return self.meas.values()
 
     def update_preceding(self, preceding=None):
         if preceding is not None:
@@ -385,13 +394,16 @@ class MapPoint(GraphMapPoint):
 
     
 
-class Measurement(GraphMeasurement):
+class Measurement:
     
     Source = Enum('Measurement.Source', ['TRIANGULATION', 'TRACKING', 'REFIND'])
     Type = Enum('Measurement.Type', ['STEREO', 'LEFT', 'RIGHT'])
 
     def __init__(self, type, source, keypoints, descriptors):
         super().__init__()
+
+        self.keyframe = None
+        self.mappoint = None
 
         self.type = type
         self.source = source
@@ -405,6 +417,17 @@ class Measurement(GraphMeasurement):
                 *keypoints[0].pt, keypoints[1].pt[0]])
 
         self.triangulation = (source == self.Source.TRIANGULATION)
+
+    @property
+    def id(self):
+        return (self.keyframe.id, self.mappoint.id)
+
+    def __eq__(self, rhs):
+        return (isinstance(rhs, Measurement) and
+            self.id == rhs.id)
+
+    def __hash__(self):
+        return hash(self.id)
 
     def get_descriptor(self, i=0):
         return self.descriptors[i]

@@ -33,7 +33,7 @@ def main(args):
     
 
     durations = []
-    for i in range(len(dataset))[:200]:
+    for i in range(len(dataset))[:300]:
         tracker.update(i, dataset.left[i], dataset.right[i], timestamp=dataset.timestamps[i])
         # time.sleep(0.5)
         viewer.update()

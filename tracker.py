@@ -28,9 +28,6 @@ class Tracker(object):
         self.optimizer = BundleAdjustment()
         self.min_measurements = params.pnp_min_measurements
         self.max_iterations = params.pnp_max_iterations
-        
-    def stop(self):
-        pass
 
     def initialize(self, frame):
         mappoints, measurements = frame.triangulate()
