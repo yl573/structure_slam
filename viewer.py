@@ -95,7 +95,7 @@ class MapViewer(object):
         self.q_active.put(points)
 
         lines = []
-        for kf in self.system.graph.keyframes():
+        for kf in self.system.map.keyframes():
             if kf.preceding_keyframe:
                 lines.append(([*kf.position, *kf.preceding_keyframe.position], 1))
             if kf.loop_keyframe is not None:
@@ -106,14 +106,14 @@ class MapViewer(object):
         if refresh:
             print('****************************************************************', 'refresh')
             cameras = []
-            for kf in self.system.graph.keyframes():
+            for kf in self.system.map.keyframes():
                 cameras.append(kf.pose.matrix())
             self.q_camera.put(cameras)
 
 
             points = []
             colors = []
-            for pt in self.system.graph.mappoints():
+            for pt in self.system.map.mappoints():
                 points.append(pt.position)
                 colors.append(pt.color)
             if len(points) > 0:
@@ -123,7 +123,7 @@ class MapViewer(object):
             cameras = []
             points = []
             colors = []
-            for kf in self.system.graph.keyframes()[-20:]:
+            for kf in self.system.map.keyframes()[-20:]:
                 if kf.id not in self.saved_keyframes:
                     cameras.append(kf.pose.matrix())
                     self.saved_keyframes.add(kf.id)

@@ -1,10 +1,4 @@
-from threading import Lock
-
-from collections import defaultdict, Counter
-from itertools import chain
-
-
-class CovisibilityGraph(object):
+class Map(object):
     def __init__(self, ):
         self.kfs = []
         self.pts = set()

@@ -4,7 +4,7 @@ import time
 from itertools import chain
 from collections import defaultdict
 
-from covisibility import CovisibilityGraph
+from covisibility import Map
 from optimization import BundleAdjustment
 from frame import Measurement
 from motion import MotionModel
@@ -19,7 +19,7 @@ class Tracker(object):
         self.cam = cam
 
         self.motion_model = MotionModel()
-        self.graph = CovisibilityGraph()
+        self.map = Map()
         
         self.preceding = None        # last keyframe
         self.current = None          # current frame
@@ -36,10 +36,10 @@ class Tracker(object):
 
         keyframe = frame.to_keyframe()
         keyframe.set_fixed(True)
-        self.graph.add_keyframe(keyframe)
+        self.map.add_keyframe(keyframe)
         for mappoint, measurement in zip(mappoints, measurements):
-            self.graph.add_mappoint(mappoint)
-            self.graph.add_measurement(keyframe, mappoint, measurement)
+            self.map.add_mappoint(mappoint)
+            self.map.add_measurement(keyframe, mappoint, measurement)
             mappoint.increase_measurement_count()
 
         self.preceding = keyframe
@@ -108,11 +108,11 @@ class Tracker(object):
             keyframe.update_preceding(self.preceding)
 
             mappoints, measurements = keyframe.triangulate()
-            self.graph.add_keyframe(keyframe)
+            self.map.add_keyframe(keyframe)
 
             for mappoint, measurement in zip(mappoints, measurements):
-                self.graph.add_mappoint(mappoint)
-                self.graph.add_measurement(keyframe, mappoint, measurement)
+                self.map.add_mappoint(mappoint)
+                self.map.add_measurement(keyframe, mappoint, measurement)
                 mappoint.increase_measurement_count()
             
             self.preceding = keyframe
