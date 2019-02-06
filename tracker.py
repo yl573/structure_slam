@@ -23,7 +23,6 @@ class Tracker(object):
         self.motion_model = MotionModel()
 
         self.graph = CovisibilityGraph()
-        self.mapping = Mapping(self.graph, params)
         
         self.preceding = None        # last keyframe
         self.current = None          # current frame
@@ -44,7 +43,10 @@ class Tracker(object):
         keyframe = frame.to_keyframe()
         keyframe.set_fixed(True)
         self.graph.add_keyframe(keyframe)
-        self.mapping.add_measurements(keyframe, mappoints, measurements)
+        for mappoint, measurement in zip(mappoints, measurements):
+            self.graph.add_mappoint(mappoint)
+            self.graph.add_measurement(keyframe, mappoint, measurement)
+            mappoint.increase_measurement_count()
 
         self.preceding = keyframe
         self.current = keyframe
@@ -115,18 +117,14 @@ class Tracker(object):
             keyframe = frame.to_keyframe()
             keyframe.update_preceding(self.preceding)
 
-            # mappoints, measurements = keyframe.triangulate()
+            mappoints, measurements = keyframe.triangulate()
+            self.graph.add_keyframe(keyframe)
 
-            # for mappoint, measurement in zip(mappoints, measurements):
-            #     self.graph.add_mappoint(mappoint)
-            #     self.graph.add_measurement(keyframe, mappoint, measurement)
-            #     mappoint.increase_measurement_count()
-
-            # self.graph.add_keyframe(keyframe)
-            # for m in measurements:
-            #     self.graph.add_measurement(keyframe, m.mappoint, m)
+            for mappoint, measurement in zip(mappoints, measurements):
+                self.graph.add_mappoint(mappoint)
+                self.graph.add_measurement(keyframe, mappoint, measurement)
+                mappoint.increase_measurement_count()
             
-            self.mapping.add_keyframe(keyframe, measurements)
             self.preceding = keyframe
 
         self.set_tracking(False)
