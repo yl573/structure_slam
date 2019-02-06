@@ -34,7 +34,7 @@ class Frame(object):
         self.projection_matrix = (
             self.cam.intrinsic.dot(self.transform_matrix))  # from world frame to image
 
-        self.feature = feature
+        self.feature = None
         self.image = image
         self.height, self.width = self.image.shape[:2]
 

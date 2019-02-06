@@ -9,7 +9,6 @@ from optimization import BundleAdjustment
 from frame import Measurement
 from motion import MotionModel
 from frame import StereoFrame
-from feature import ImageFeature
 import g2o
 
 
@@ -66,10 +65,7 @@ class Tracker(object):
     
     def update(self, i, left_img, right_img, timestamp):
 
-        featurel = ImageFeature(left_img, self.params)
-        featurer = ImageFeature(right_img, self.params)
-
-        frame = StereoFrame(i, g2o.Isometry3d(), featurel, featurer, self.cam, self.params, left_img, right_img, timestamp=timestamp)
+        frame = StereoFrame(i, g2o.Isometry3d(), None, None, self.cam, self.params, left_img, right_img, timestamp=timestamp)
 
         if i == 0:
             self.initialize(frame)
