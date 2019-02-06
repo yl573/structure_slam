@@ -162,8 +162,7 @@ class StereoFrame(Frame):
 
         super().__init__(idx, pose, cam, params, img_left, timestamp)
         self.left = Frame(idx, pose, cam, params, img_left, timestamp)
-        self.right = Frame(idx,
-                           cam.compute_right_camera_pose(pose),
+        self.right = Frame(idx, cam.compute_right_camera_pose(pose),
                            right_cam or cam,
                            params, img_right, timestamp)
 
@@ -223,7 +222,7 @@ class StereoFrame(Frame):
 
         return measurements
 
-    def triangulate(self):
+    def create_mappoints_from_triangulation(self):
 
         mappoints, matches = self.triangulate_points(self.left.keypoints, self.left.descriptors, 
                                                      self.right.keypoints, self.right.descriptors)
