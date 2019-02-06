@@ -7,7 +7,7 @@ from collections import defaultdict
 from covisibility import CovisibilityGraph
 from optimization import BundleAdjustment
 from mapping import Mapping
-from mapping import MappingThread
+# from mapping import MappingThread
 from frame import Measurement
 from motion import MotionModel
 from frame import StereoFrame
@@ -23,7 +23,7 @@ class Tracker(object):
         self.motion_model = MotionModel()
 
         self.graph = CovisibilityGraph()
-        self.mapping = MappingThread(self.graph, params)
+        self.mapping = Mapping(self.graph, params)
         
         self.preceding = None        # last keyframe
         self.current = None          # current frame
@@ -34,7 +34,7 @@ class Tracker(object):
         self.max_iterations = params.pnp_max_iterations
         
     def stop(self):
-        self.mapping.stop()
+        pass
 
     def initialize(self, frame):
         mappoints, measurements = frame.triangulate()
@@ -116,8 +116,16 @@ class Tracker(object):
             keyframe.update_preceding(self.preceding)
 
             # mappoints, measurements = keyframe.triangulate()
-            # self.mapping.add_measurements(keyframe, mappoints, measurements)
 
+            # for mappoint, measurement in zip(mappoints, measurements):
+            #     self.graph.add_mappoint(mappoint)
+            #     self.graph.add_measurement(keyframe, mappoint, measurement)
+            #     mappoint.increase_measurement_count()
+
+            # self.graph.add_keyframe(keyframe)
+            # for m in measurements:
+            #     self.graph.add_measurement(keyframe, m.mappoint, m)
+            
             self.mapping.add_keyframe(keyframe, measurements)
             self.preceding = keyframe
 
