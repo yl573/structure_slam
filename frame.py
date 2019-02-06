@@ -352,16 +352,12 @@ class MapPoint:
         self.descriptor = descriptor
         self.covariance = covariance
         self.color = color
-        # self.owner = None
         self.meas = list()
 
         self.count = defaultdict(int)
 
     def measurements(self):
         return list(self.meas)
-
-    # def keyframes(self):
-    #     return self.meas.values()
 
     def add_measurement(self, m):
         self.meas.append(m)
@@ -411,7 +407,6 @@ class Measurement:
 
         # self.keyframe = keyframe
         # self.mappoint = mappoint
-        # self.keyframe = None
         self.mappoint = None
 
         self.type = type
