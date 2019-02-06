@@ -29,46 +29,39 @@ class ImageFeature(object):
 
         self._lock = Lock()
 
-    # def extract(self):
-    #     self.keypoints = self.detector.detect(self.image)
-    #     self.keypoints, self.descriptors = self.extractor.compute(
-    #         self.image, self.keypoints)
 
-    #     self.unmatched = np.ones(len(self.keypoints), dtype=bool)
+    # def find_matches(self, predictions, descriptors):
+    #     matches = dict()
+    #     distances = defaultdict(lambda: float('inf'))
+    #     for m, query_idx, train_idx in self.matched_by(descriptors):
+    #         if m.distance > min(distances[train_idx], self.distance):
+    #             continue
 
+    #         pt1 = predictions[query_idx]
+    #         pt2 = self.keypoints[train_idx].pt
+    #         dx = pt1[0] - pt2[0]
+    #         dy = pt1[1] - pt2[1]
+    #         if np.sqrt(dx*dx + dy*dy) > self.neighborhood:
+    #             continue
 
-    def find_matches(self, predictions, descriptors):
-        matches = dict()
-        distances = defaultdict(lambda: float('inf'))
-        for m, query_idx, train_idx in self.matched_by(descriptors):
-            if m.distance > min(distances[train_idx], self.distance):
-                continue
+    #         matches[train_idx] = query_idx
+    #         distances[train_idx] = m.distance
+    #     matches = [(i, j) for j, i in matches.items()]
+    #     return matches
 
-            pt1 = predictions[query_idx]
-            pt2 = self.keypoints[train_idx].pt
-            dx = pt1[0] - pt2[0]
-            dy = pt1[1] - pt2[1]
-            if np.sqrt(dx*dx + dy*dy) > self.neighborhood:
-                continue
+    # def matched_by(self, descriptors):
+    #     with self._lock:
+    #         unmatched_descriptors = self.descriptors[self.unmatched]
+    #         if len(unmatched_descriptors) == 0:
+    #             return []
+    #         lookup = dict(zip(
+    #             range(len(unmatched_descriptors)), 
+    #             np.where(self.unmatched)[0]))
 
-            matches[train_idx] = query_idx
-            distances[train_idx] = m.distance
-        matches = [(i, j) for j, i in matches.items()]
-        return matches
-
-    def matched_by(self, descriptors):
-        with self._lock:
-            unmatched_descriptors = self.descriptors[self.unmatched]
-            if len(unmatched_descriptors) == 0:
-                return []
-            lookup = dict(zip(
-                range(len(unmatched_descriptors)), 
-                np.where(self.unmatched)[0]))
-
-        # TODO: reduce matched points by using predicted position
-        matches = self.matcher.match(
-            np.array(descriptors), unmatched_descriptors)
-        return [(m, m.queryIdx, m.trainIdx) for m in matches]
+    #     # TODO: reduce matched points by using predicted position
+    #     matches = self.matcher.match(
+    #         np.array(descriptors), unmatched_descriptors)
+    #     return [(m, m.queryIdx, m.trainIdx) for m in matches]
 
     def row_match(self, *args, **kwargs):
         return row_match(self.matcher, *args, **kwargs)
