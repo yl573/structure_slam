@@ -11,7 +11,7 @@ from numbers import Number
 
 
 class Frame(object):
-    def __init__(self, idx, pose, feature, cam, params, timestamp=None):
+    def __init__(self, idx, pose, feature, cam, params, image, timestamp=None):
         self.idx = idx
         self.pose = pose    # g2o.Isometry3d
         self.cam = cam
@@ -35,7 +35,7 @@ class Frame(object):
             self.cam.intrinsic.dot(self.transform_matrix))  # from world frame to image
 
         self.feature = feature
-        self.image = self.feature.image
+        self.image = image
         self.height, self.width = self.image.shape[:2]
 
         self.keypoints = self.detector.detect(self.image)
@@ -161,15 +161,15 @@ class Frame(object):
 
 
 class StereoFrame(Frame):
-    def __init__(self, idx, pose, feature, right_feature, cam, params,
+    def __init__(self, idx, pose, feature, right_feature, cam, params, img_left, img_right,
                  right_cam=None, timestamp=None):
 
-        super().__init__(idx, pose, feature, cam, params, timestamp)
-        self.left = Frame(idx, pose, feature, cam, params, timestamp)
+        super().__init__(idx, pose, feature, cam, params, img_left, timestamp)
+        self.left = Frame(idx, pose, feature, cam, params, img_left, timestamp)
         self.right = Frame(idx,
                            cam.compute_right_camera_pose(pose),
                            right_feature, right_cam or cam,
-                           params, timestamp)
+                           params, img_right, timestamp)
 
 
     def match_mappoints(self, mappoints, source):
@@ -332,7 +332,7 @@ class StereoFrame(Frame):
         return KeyFrame(
             self.idx, self.pose,
             self.left.feature, self.right.feature,
-            self.cam, self.params, self.right.cam)
+            self.cam, self.params, self.left.image, self.right.image, self.right.cam)
 
 
 class KeyFrame(StereoFrame):
