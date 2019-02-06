@@ -11,11 +11,21 @@ from numbers import Number
 
 
 class Frame(object):
-    def __init__(self, idx, pose, feature, cam, timestamp=None):
+    def __init__(self, idx, pose, feature, cam, params, timestamp=None):
         self.idx = idx
         self.pose = pose    # g2o.Isometry3d
         self.cam = cam
         self.timestamp = timestamp
+        self.params = params
+
+        self.detector = params.feature_detector
+        self.extractor = params.descriptor_extractor
+        self.matcher = params.descriptor_matcher
+
+        self.cell_size = params.matching_cell_size
+        self.distance = params.matching_distance
+        self.neighborhood = (
+            params.matching_cell_size * params.matching_neighborhood)
         
 
         self.orientation = pose.orientation()
@@ -28,15 +38,9 @@ class Frame(object):
         self.image = self.feature.image
         self.height, self.width = self.image.shape[:2]
 
-        self.keypoints = self.feature.detector.detect(self.image)
-        self.keypoints, self.descriptors = self.feature.extractor.compute(
+        self.keypoints = self.detector.detect(self.image)
+        self.keypoints, self.descriptors = self.extractor.compute(
             self.image, self.keypoints)
-
-        # self.keypoints = self.feature.keypoints
-        # self.descriptors = self.feature.descriptors
-        self.distance = self.feature.distance
-        self.neighborhood = self.feature.neighborhood
-        self.matcher = self.feature.matcher
 
     # batch version
 
@@ -157,15 +161,15 @@ class Frame(object):
 
 
 class StereoFrame(Frame):
-    def __init__(self, idx, pose, feature, right_feature, cam,
+    def __init__(self, idx, pose, feature, right_feature, cam, params,
                  right_cam=None, timestamp=None):
 
-        super().__init__(idx, pose, feature, cam, timestamp)
-        self.left = Frame(idx, pose, feature, cam, timestamp)
+        super().__init__(idx, pose, feature, cam, params, timestamp)
+        self.left = Frame(idx, pose, feature, cam, params, timestamp)
         self.right = Frame(idx,
                            cam.compute_right_camera_pose(pose),
                            right_feature, right_cam or cam,
-                           timestamp)
+                           params, timestamp)
 
 
     def match_mappoints(self, mappoints, source):
@@ -328,7 +332,7 @@ class StereoFrame(Frame):
         return KeyFrame(
             self.idx, self.pose,
             self.left.feature, self.right.feature,
-            self.cam, self.right.cam)
+            self.cam, self.params, self.right.cam)
 
 
 class KeyFrame(StereoFrame):
