@@ -124,18 +124,20 @@ class StereoFrame(Frame):
                            right_feature, right_cam or cam,
                            timestamp, pose_covariance)
 
-    def find_matches(self, source, points, descriptors):
 
-        q2 = Queue()
+    def match_mappoints(self, mappoints, source):
 
-        def find_right(points, descriptors, q):
-            m = dict(self.right.find_matches(points, descriptors))
-            q.put(m)
-        t2 = Thread(target=find_right, args=(points, descriptors, q2))
-        t2.start()
+        points = []
+        descriptors = []
+        for mappoint in mappoints:
+            points.append(mappoint.position)
+            descriptors.append(mappoint.descriptor)
+
+        print(points)
+        exit()
+
         matches_left = dict(self.left.find_matches(points, descriptors))
-        t2.join()
-        matches_right = q2.get()
+        matches_right = dict(self.right.find_matches(points, descriptors))
 
         measurements = []
         for i, j in matches_left.items():
@@ -181,20 +183,6 @@ class StereoFrame(Frame):
 
         return measurements
 
-    def match_mappoints(self, mappoints, source):
-        points = []
-        descriptors = []
-        for mappoint in mappoints:
-            points.append(mappoint.position)
-            descriptors.append(mappoint.descriptor)
-        matched_measurements = self.find_matches(source, points, descriptors)
-
-        measurements = []
-        for i, meas in matched_measurements:
-            meas.mappoint = mappoints[i]
-            measurements.append(meas)
-        return measurements
-
     def triangulate(self):
         kps_left, desps_left, idx_left = self.left.get_unmatched_keypoints()
         kps_right, desps_right, idx_right = self.right.get_unmatched_keypoints()
@@ -207,6 +195,7 @@ class StereoFrame(Frame):
             meas = Measurement(
                 Measurement.Type.STEREO,
                 Measurement.Source.TRIANGULATION,
+                mappoint,
                 [kps_left[i], kps_right[j]],
                 [desps_left[i], desps_right[j]])
             meas.mappoint = mappoint
@@ -402,12 +391,10 @@ class Measurement:
                   'TRIANGULATION', 'TRACKING', 'REFIND'])
     Type = Enum('Measurement.Type', ['STEREO', 'LEFT', 'RIGHT'])
 
-    def __init__(self, type, source, keypoints, descriptors):
+    def __init__(self, type, source, mappoint, keypoints, descriptors):
         super().__init__()
 
-        # self.keyframe = keyframe
-        # self.mappoint = mappoint
-        self.mappoint = None
+        self.mappoint = mappoint
 
         self.type = type
         self.source = source
