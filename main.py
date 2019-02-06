@@ -12,7 +12,6 @@ from params import ParamsKITTI, ParamsEuroc
 from dataset import KITTIOdometry, EuRoCDataset
 from tracker import Tracker
 from viewer import MapViewer
-# from mapping import Map
 import time
 
 from viewer import MapViewer
@@ -34,7 +33,7 @@ def main(args):
     
 
     durations = []
-    for i in range(len(dataset))[:600]:
+    for i in range(len(dataset))[:200]:
         tracker.update(i, dataset.left[i], dataset.right[i], timestamp=dataset.timestamps[i])
         # time.sleep(0.5)
         viewer.update()

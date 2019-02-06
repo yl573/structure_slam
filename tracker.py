@@ -6,8 +6,6 @@ from collections import defaultdict
 
 from covisibility import CovisibilityGraph
 from optimization import BundleAdjustment
-from mapping import Mapping
-# from mapping import MappingThread
 from frame import Measurement
 from motion import MotionModel
 from frame import StereoFrame
@@ -21,7 +19,6 @@ class Tracker(object):
         self.cam = cam
 
         self.motion_model = MotionModel()
-
         self.graph = CovisibilityGraph()
         
         self.preceding = None        # last keyframe
@@ -71,10 +68,6 @@ class Tracker(object):
 
     
     def update(self, i, left_img, right_img, timestamp):
-
-        while self.is_paused():
-            time.sleep(1e-4)
-        self.set_tracking(True)
 
         featurel = ImageFeature(left_img, self.params)
         featurer = ImageFeature(right_img, self.params)
@@ -127,8 +120,6 @@ class Tracker(object):
             
             self.preceding = keyframe
 
-        self.set_tracking(False)
-
     def get_local_map_points(self, frame):
         checked = set()
         filtered = []
@@ -144,39 +135,8 @@ class Tracker(object):
 
 
     def should_be_keyframe(self, frame, measurements):
-        if self.adding_keyframes_stopped():
-            return False
-
         n_matches = len(measurements)
         n_matches_ref = len(self.preceding.measurements())
 
         return ((n_matches / n_matches_ref) < 
             self.params.min_tracked_points_ratio) or n_matches < 20
-
-
-    def is_initialized(self):
-        return self.status['initialized']
-
-    def pause(self):
-        self.status['paused'] = True
-
-    def unpause(self):
-        self.status['paused'] = False
-
-    def is_paused(self):
-        return self.status['paused']
-
-    def is_tracking(self):
-        return self.status['tracking']
-
-    def set_tracking(self, status):
-        self.status['tracking'] = status
-
-    def stop_adding_keyframes(self):
-        self.status['adding_keyframes_stopped'] = True
-
-    def resume_adding_keyframes(self):
-        self.status['adding_keyframes_stopped'] = False
-
-    def adding_keyframes_stopped(self):
-        return self.status['adding_keyframes_stopped']
