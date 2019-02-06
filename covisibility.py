@@ -33,13 +33,6 @@ class GraphMapPoint(object):
         with self._lock:
             self.meas[m] = m.keyframe
 
-    def remove_measurement(self, m):
-        with self._lock:
-            try:
-                del self.meas[m]
-            except KeyError:
-                pass
-
 class CovisibilityGraph(object):
     def __init__(self, ):
         self._lock = Lock()
@@ -67,16 +60,6 @@ class CovisibilityGraph(object):
         with self._lock:
             self.pts.add(pt)
 
-    def remove_mappoint(self, pt):
-        with self._lock:
-            try:
-                for m in pt.measurements():
-                    m.keyframe.remove_measurement(m)
-                    del self.meas_lookup[m.id]
-                self.pts.remove(pt)
-            except:
-                pass
-
     def add_measurement(self, kf, pt, meas):
         with self._lock:
             if kf not in self.kfs_set or pt not in self.pts:
@@ -94,15 +77,6 @@ class CovisibilityGraph(object):
             pt.add_measurement(meas)
 
             self.meas_lookup[meas.id] = meas
-
-    def remove_measurement(self, m):
-        m.keyframe.remove_measurement(m)
-        m.mappoint.remove_measurement(m)
-        with self._lock:
-            try:
-                del self.meas_lookup[m.id]
-            except:
-                pass
 
     def has_measurement(self, *args):
         with self._lock:
