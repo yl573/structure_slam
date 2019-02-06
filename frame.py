@@ -99,7 +99,26 @@ class Frame(object):
         points = np.transpose(points)
         proj, _ = self.project(self.transform(points))
         proj = proj.transpose()
-        return self.feature.find_matches(proj, descriptors)
+        return self.find_matches_feature(proj, descriptors)
+
+    def find_matches_feature(self, predictions, descriptors):
+        matches = dict()
+        distances = defaultdict(lambda: float('inf'))
+        for m, query_idx, train_idx in self.feature.matched_by(descriptors):
+            if m.distance > min(distances[train_idx], self.feature.distance):
+                continue
+
+            pt1 = predictions[query_idx]
+            pt2 = self.keypoints[train_idx].pt
+            dx = pt1[0] - pt2[0]
+            dy = pt1[1] - pt2[1]
+            if np.sqrt(dx*dx + dy*dy) > self.feature.neighborhood:
+                continue
+
+            matches[train_idx] = query_idx
+            distances[train_idx] = m.distance
+        matches = [(i, j) for j, i in matches.items()]
+        return matches
 
     def get_keypoint(self, i):
         return self.keypoints[i]
