@@ -27,7 +27,6 @@ class Frame(object):
         self.neighborhood = (
             params.matching_cell_size * params.matching_neighborhood)
         
-
         self.orientation = pose.orientation()
         self.position = pose.position()
         self.transform_matrix = pose.inverse().matrix()[:3]  # shape: (3, 4)
@@ -40,6 +39,7 @@ class Frame(object):
         self.keypoints = self.detector.detect(self.image)
         self.keypoints, self.descriptors = self.extractor.compute(
             self.image, self.keypoints)
+        self.colors = self.get_color(self.keypoints)
 
     # batch version
 
@@ -147,16 +147,13 @@ class Frame(object):
     def get_descriptor(self, i):
         return self.descriptors[i]
 
-    def get_color(self, pt):
-        x = int(np.clip(pt[0], 0, self.width-1))
-        y = int(np.clip(pt[1], 0, self.height-1))
-        color = self.image[y, x]
-        if isinstance(color, Number):
-            color = np.array([color, color, color])
-        return color[::-1] / 255.
-
-    def get_unmatched_keypoints(self):
-        return self.keypoints, self.descriptors, list(range(len(self.keypoints)))
+    def get_color(self, kps):
+        colors = []
+        for kp in kps:
+            x = int(np.clip(kp.pt[0], 0, self.width-1))
+            y = int(np.clip(kp.pt[1], 0, self.height-1))
+            colors.append(self.image[y, x] / 255)
+        return colors
 
 
 class StereoFrame(Frame):
@@ -227,11 +224,9 @@ class StereoFrame(Frame):
         return measurements
 
     def triangulate(self):
-        kps_left, desps_left, idx_left = self.left.get_unmatched_keypoints()
-        kps_right, desps_right, idx_right = self.right.get_unmatched_keypoints()
 
-        mappoints, matches = self.triangulate_points(
-            kps_left, desps_left, kps_right, desps_right)
+        mappoints, matches = self.triangulate_points(self.left.keypoints, self.left.descriptors, 
+                                                     self.right.keypoints, self.right.descriptors)
 
         measurements = []
         for mappoint, (i, j) in zip(mappoints, matches):
@@ -239,8 +234,8 @@ class StereoFrame(Frame):
                 Measurement.Type.STEREO,
                 Measurement.Source.TRIANGULATION,
                 mappoint,
-                [kps_left[i], kps_right[j]],
-                [desps_left[i], desps_right[j]])
+                [self.left.keypoints[i], self.right.keypoints[j]],
+                [self.left.descriptors[i], self.right.descriptors[j]])
             meas.view = self.transform(mappoint.position)
             measurements.append(meas)
 
@@ -291,10 +286,8 @@ class StereoFrame(Frame):
             normal = point - self.position
             normal = normal / np.linalg.norm(normal)
 
-            color = self.left.get_color(px_left[i])
-
             mappoint = MapPoint(
-                point, normal, desps_left[matches[i].queryIdx], color)
+                point, normal, desps_left[matches[i].queryIdx], self.colors[i])
             mappoints.append(mappoint)
             matchs.append((matches[i].queryIdx, matches[i].trainIdx))
 
