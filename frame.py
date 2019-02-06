@@ -104,8 +104,8 @@ class Frame(object):
     def get_color(self, pt):
         return self.feature.get_color(pt)
 
-    def set_matched(self, i):
-        self.feature.set_matched(i)
+    # def set_matched(self, i):
+    #     self.feature.set_matched(i)
 
     def get_unmatched_keypoints(self):
         return self.feature.get_unmatched_keypoints()
@@ -156,8 +156,7 @@ class StereoFrame(Frame):
                     [self.left.get_descriptor(j),
                         self.right.get_descriptor(j2)])
                 measurements.append(meas)
-                self.left.set_matched(j)
-                self.right.set_matched(j2)
+
             # if only left is matched
             else:
                 meas = Measurement(
@@ -167,7 +166,6 @@ class StereoFrame(Frame):
                     [self.left.get_keypoint(j)],
                     [self.left.get_descriptor(j)])
                 measurements.append(meas)
-                self.left.set_matched(j)
 
         for i, j in matches_right.items():
             # if only right is matched
@@ -179,7 +177,6 @@ class StereoFrame(Frame):
                     [self.right.get_keypoint(j)],
                     [self.right.get_descriptor(j)])
                 measurements.append(meas)
-                self.right.set_matched(j)
 
         return measurements
 
@@ -200,9 +197,6 @@ class StereoFrame(Frame):
                 [desps_left[i], desps_right[j]])
             meas.view = self.transform(mappoint.position)
             measurements.append(meas)
-
-            self.left.set_matched(idx_left[i])
-            self.right.set_matched(idx_right[j])
 
         return mappoints, measurements
 

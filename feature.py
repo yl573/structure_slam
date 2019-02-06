@@ -89,10 +89,6 @@ class ImageFeature(object):
             color = np.array([color, color, color])
         return color[::-1] / 255.
 
-    def set_matched(self, i):
-        with self._lock:
-            self.unmatched[i] = False
-
     def get_unmatched_keypoints(self):
         keypoints = []
         descriptors = []
