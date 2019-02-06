@@ -36,12 +36,6 @@ class CovisibilityGraph(object):
             if kf not in self.kfs_set or pt not in self.pts:
                 return
 
-            for m in pt.measurements():
-                if m.keyframe == kf:
-                    continue
-                kf.add_covisibility_keyframe(m.keyframe)
-                m.keyframe.add_covisibility_keyframe(kf)
-
             meas.keyframe = kf
             meas.mappoint = pt
             kf.add_measurement(meas)
@@ -58,64 +52,3 @@ class CovisibilityGraph(object):
                 return id in self.meas_lookup
             else:
                 raise TypeError
-
-    def get_reference_frame(self, seedpoints):
-        assert len(seedpoints) > 0
-        visible = [pt.keyframes() for pt in seedpoints]
-        visible = Counter(chain(*visible))
-        return visible.most_common(1)[0][0]
-
-    def get_local_map(self, seedpoints, window_size=15):
-        reference = self.get_reference_frame(seedpoints)
-        covisible = chain(
-            reference.covisibility_keyframes().items(), [(reference, float('inf'))])
-        covisible = sorted(covisible, key=lambda _:_[1], reverse=True)
-
-        local_map = [seedpoints]
-        local_keyframes = []
-        for kf, n in covisible[:window_size]:
-            if n < 1:
-                continue
-            local_map.append(kf.mappoints())
-            local_keyframes.append(kf)
-        local_map = list(set(chain(*local_map)))
-
-        return local_map, local_keyframes
-
-    def get_local_map_v2(self, seedframes, window_size=1, loop_window_size=1):
-        covisible = []
-        for kf in set(seedframes):
-            covisible.append(Counter(kf.covisibility_keyframes()))
-        covisible = sum(covisible, Counter())
-        for kf in set(seedframes):
-            covisible[kf] = float('inf')
-        local = sorted(
-            covisible.items(), key=lambda _:_[1], reverse=True)
-
-        id = max([_.id for _ in covisible])
-        loop_frames = [_ for _ in local if _[0].id < id-50]
-
-        local = local[:window_size]
-        loop_local = []
-        if len(loop_frames) > 0:
-            loop_covisible = sorted(
-                loop_frames[0][0].covisibility_keyframes().items(), 
-                key=lambda _:_[1], reverse=True)
-
-            for kf, n in loop_covisible:
-                if kf not in set([_[0] for _ in local]):
-                    loop_local.append((kf, n))
-                    if len(loop_local) >= loop_window_size:
-                        break
-
-        local = chain(local, loop_local)
-
-        local_map = []
-        local_keyframes = []
-        for kf, n in local:
-            if n < 1:
-                continue
-            local_map.append(kf.mappoints())
-            local_keyframes.append(kf)
-        local_map = list(set(chain(*local_map)))
-        return local_map, local_keyframes
