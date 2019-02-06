@@ -133,9 +133,6 @@ class StereoFrame(Frame):
             points.append(mappoint.position)
             descriptors.append(mappoint.descriptor)
 
-        print(points)
-        exit()
-
         matches_left = dict(self.left.find_matches(points, descriptors))
         matches_right = dict(self.right.find_matches(points, descriptors))
 
@@ -153,11 +150,12 @@ class StereoFrame(Frame):
                 meas = Measurement(
                     Measurement.Type.STEREO,
                     source,
+                    mappoints[i],
                     [self.left.get_keypoint(j),
                         self.right.get_keypoint(j2)],
                     [self.left.get_descriptor(j),
                         self.right.get_descriptor(j2)])
-                measurements.append((i, meas))
+                measurements.append(meas)
                 self.left.set_matched(j)
                 self.right.set_matched(j2)
             # if only left is matched
@@ -165,9 +163,10 @@ class StereoFrame(Frame):
                 meas = Measurement(
                     Measurement.Type.LEFT,
                     source,
+                    mappoints[i],
                     [self.left.get_keypoint(j)],
                     [self.left.get_descriptor(j)])
-                measurements.append((i, meas))
+                measurements.append(meas)
                 self.left.set_matched(j)
 
         for i, j in matches_right.items():
@@ -176,9 +175,10 @@ class StereoFrame(Frame):
                 meas = Measurement(
                     Measurement.Type.RIGHT,
                     source,
+                    mappoints[i],
                     [self.right.get_keypoint(j)],
                     [self.right.get_descriptor(j)])
-                measurements.append((i, meas))
+                measurements.append(meas)
                 self.right.set_matched(j)
 
         return measurements
@@ -198,7 +198,6 @@ class StereoFrame(Frame):
                 mappoint,
                 [kps_left[i], kps_right[j]],
                 [desps_left[i], desps_right[j]])
-            meas.mappoint = mappoint
             meas.view = self.transform(mappoint.position)
             measurements.append(meas)
 
