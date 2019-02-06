@@ -65,7 +65,7 @@ class Tracker(object):
     
     def update(self, i, left_img, right_img, timestamp):
 
-        frame = StereoFrame(i, g2o.Isometry3d(), None, None, self.cam, self.params, left_img, right_img, timestamp=timestamp)
+        frame = StereoFrame(i, g2o.Isometry3d(), self.cam, self.params, left_img, right_img, timestamp=timestamp)
 
         if i == 0:
             self.initialize(frame)
