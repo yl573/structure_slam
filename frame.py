@@ -333,7 +333,7 @@ class StereoFrame:
         self.transform_matrix = self.pose.inverse().matrix()[:3]
         self.projection_matrix = (
             self.cam.intrinsic.dot(self.transform_matrix))
-            
+
         self.right.update_pose(pose)
         self.left.update_pose(
             self.cam.compute_right_camera_pose(pose))
@@ -379,8 +379,6 @@ class KeyFrame(StereoFrame):
 
         self.preceding_keyframe = None
         self.preceding_constraint = None
-        self.loop_keyframe = None
-        self.loop_constraint = None
         self.fixed = False
 
     def add_measurement(self, m):
@@ -397,10 +395,6 @@ class KeyFrame(StereoFrame):
             self.preceding_keyframe = preceding
         self.preceding_constraint = (
             self.preceding_keyframe.pose.inverse() * self.pose)
-
-    def set_loop(self, keyframe, constraint):
-        self.loop_keyframe = keyframe
-        self.loop_constraint = constraint
 
     def is_fixed(self):
         return self.fixed
