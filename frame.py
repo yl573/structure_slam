@@ -318,8 +318,36 @@ class KeyFrame:
         self.left.update_pose(
             self.cam.compute_right_camera_pose(pose))
 
-    def create_mappoints_from_triangulation(self):
+    # def match_key_points(self):
+    #     matches = match_point_descriptors(self.left.points, self.right.points,
+    #                                       self.left.point_descriptors,
+    #                                       self.right.point_descriptors)
+    #     left_matched_pts = self.l_frame.points[matches[:, 0]]
+    #     right_matched_pts = self.r_frame.points[matches[:, 1]]
+    #     left_matched_des = self.l_frame.point_descriptors[matches[:, 0]]
+    #     right_matched_des = self.r_frame.point_descriptors[matches[:, 1]]
+    #     return left_matched_pts, right_matched_pts, left_matched_des, right_matched_des
 
+    # def create_map_points_from_triangulation(self):
+    #     kps_left, kps_right, des_left, des_right = self.match_key_points()
+    #     pts_3d = self.triangulate_points(kps_left, kps_right)
+
+    #     can_view = np.logical_and(
+    #         self.l_frame.can_view(pts_3d),
+    #         self.r_frame.can_view(pts_3d))
+
+    #     map_points = []
+    #     observations = []
+    #     for i, (pt_3d, kp_left, kp_right, des) in enumerate(zip(pts_3d, kps_left, kps_right, des_left)):
+    #         if not can_view[i]:
+    #             continue
+    #         map_point = MapPoint(pt_3d, des)
+    #         obs = Observation(map_point, kp_left, kp_right)
+    #         map_points.append(map_point)
+    #         observations.append(obs)
+    #     return map_points, observations
+
+    def create_mappoints_from_triangulation(self):
         mappoints, matches = self.triangulate_points(self.left.keypoints, self.left.descriptors, 
                                                      self.right.keypoints, self.right.descriptors,
                                                      self.left.colors)
@@ -490,7 +518,7 @@ class Measurement:
         self.view = None    # mappoint's position in current coordinates frame
 
         self.xy = np.array(self.keypoints[0].pt)
-        if self.type == self.Source.STEREO:
+        if self.type == self.Type.STEREO:
             self.xyx = np.array([
                 *keypoints[0].pt, keypoints[1].pt[0]])
 
