@@ -15,7 +15,6 @@ from viewer import MapViewer
 import time
 
 from viewer import MapViewer
-        
 
 def main(args):
     dataset = KITTIOdometry(args.path)
@@ -31,11 +30,9 @@ def main(args):
     # viewer = MapViewer(shared_map)
     viewer = MapViewer(tracker, params)
     
-
     durations = []
     for i in range(len(dataset)):
         tracker.update(i, dataset.left[i], dataset.right[i], timestamp=dataset.timestamps[i])
-        # time.sleep(0.5)
         viewer.update()
     
     viewer.stop()

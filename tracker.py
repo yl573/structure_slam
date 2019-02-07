@@ -77,7 +77,6 @@ class Tracker(object):
         self.current = frame
 
         predicted_pose, _ = self.motion_model.predict_pose(frame.timestamp)
-        
         frame.update_pose(predicted_pose)
 
         local_mappoints = self.get_local_map_points(frame)

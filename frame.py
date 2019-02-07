@@ -28,20 +28,20 @@ class Frame(object):
         self.neighborhood = (
             params.matching_cell_size * params.matching_neighborhood)
         
-        self.orientation = pose.orientation()
-        self.position = pose.position()
         self.transform_matrix = pose.inverse().matrix()[:3]  # shape: (3, 4)
         self.projection_matrix = (
             self.cam.intrinsic.dot(self.transform_matrix))  # from world frame to image
 
         self.image = image
         self.height, self.width = image.shape[:2]
-
-        self.keypoints = self.detector.detect(image)
-        self.keypoints, self.descriptors = self.extractor.compute(image, self.keypoints)
+        self.keypoints, self.descriptors = self.extract_features(image)
         self.colors = self.get_color(self.keypoints, image)
 
-    # batch version
+    def extract_features(self, image):
+        keypoints = self.detector.detect(image)
+        keypoints, descriptors = self.extractor.compute(image, keypoints)  
+        keypoints = np.array([kp.pt for kp in keypoints])
+        return keypoints, descriptors 
 
     def can_view(self, points, ground=False, margin=20):    # Frustum Culling
         points = np.transpose(points)
@@ -62,13 +62,19 @@ class Frame(object):
                 v >= - margin,
                 v <= self.cam.height + margin])
 
+    @property
+    def orientation(self):
+        return self.pose.orientation()
+
+    @property
+    def position(self):
+        return self.pose.position()
+
     def update_pose(self, pose):
         if isinstance(pose, g2o.SE3Quat):
             self.pose = g2o.Isometry3d(pose.orientation(), pose.position())
         else:
             self.pose = pose
-        self.orientation = self.pose.orientation()
-        self.position = self.pose.position()
 
         self.transform_matrix = self.pose.inverse().matrix()[:3]
         self.projection_matrix = (
@@ -108,38 +114,32 @@ class Frame(object):
             List of successfully matched (queryIdx, trainIdx) pairs.
         '''
         points = np.transpose(points)
-        proj, _ = self.project(self.transform(points))
-        proj = proj.transpose()
-        return self.find_matches_feature(proj, descriptors)
+        projection, _ = self.project(self.transform(points))
+        projection = projection.transpose()
 
-    def find_matches_feature(self, predictions, descriptors):
-        matches = dict()
+        matches = self.matcher.match(np.array(descriptors), self.descriptors)
+
+        # distances are there to cope with multiple trainIdx matches
+        good_matches = []
         distances = defaultdict(lambda: float('inf'))
-        for m, query_idx, train_idx in self.matched_by(descriptors):
-            if m.distance > min(distances[train_idx], self.distance):
+
+        for m in matches:
+            # check that the match is the best for each key point
+            if m.distance > min(distances[m.trainIdx], self.distance):
                 continue
 
-            pt1 = predictions[query_idx]
-            pt2 = self.keypoints[train_idx].pt
+            # check that the keypoint found is where we expected it to be
+            pt1 = projection[m.queryIdx]
+            pt2 = self.keypoints[m.trainIdx]
             dx = pt1[0] - pt2[0]
             dy = pt1[1] - pt2[1]
             if np.sqrt(dx*dx + dy*dy) > self.neighborhood:
                 continue
 
-            matches[train_idx] = query_idx
-            distances[train_idx] = m.distance
-        matches = [(i, j) for j, i in matches.items()]
-        return matches
+            good_matches.append([m.queryIdx, m.trainIdx])
+            distances[m.trainIdx] = m.distance
 
-    def matched_by(self, descriptors):
-        unmatched_descriptors = self.descriptors
-        if len(unmatched_descriptors) == 0:
-            return []
-
-        # TODO: reduce matched points by using predicted position
-        matches = self.matcher.match(
-            np.array(descriptors), unmatched_descriptors)
-        return [(m, m.queryIdx, m.trainIdx) for m in matches]
+        return np.array(good_matches)
 
     def get_keypoint(self, i):
         return self.keypoints[i]
@@ -150,8 +150,8 @@ class Frame(object):
     def get_color(self, kps, img):
         colors = []
         for kp in kps:
-            x = int(np.clip(kp.pt[0], 0, self.width-1))
-            y = int(np.clip(kp.pt[1], 0, self.height-1))
+            x = int(np.clip(kp[0], 0, self.width-1))
+            y = int(np.clip(kp[1], 0, self.height-1))
             colors.append(img[y, x] / 255)
         return colors
 
@@ -182,8 +182,8 @@ class StereoFrame:
             if i in matches_right:
                 j2 = matches_right[i]
 
-                y1 = self.left.get_keypoint(j).pt[1]
-                y2 = self.right.get_keypoint(j2).pt[1]
+                y1 = self.left.get_keypoint(j)[1]
+                y2 = self.right.get_keypoint(j2)[1]
                 if abs(y1 - y2) > 2.5:    # epipolar constraint
                     continue   # TODO: choose one
 
@@ -262,22 +262,16 @@ class StereoFrame:
 
 class KeyFrame(StereoFrame):
     _id = 0
-    _id_lock = Lock()
 
     def __init__(self, stereo_frame):
-        # super().__init__(frame.idx, frame.pose, frame.cam, frame.params, frame/, img_right,
-        #          right_cam=None, timestamp=None)
-
         super().__init__(stereo_frame.left, stereo_frame.right)
 
         self.meas = dict()
 
-        with KeyFrame._id_lock:
-            self.id = KeyFrame._id
-            KeyFrame._id += 1
+        self.id = KeyFrame._id
+        KeyFrame._id += 1
 
         self.preceding_keyframe = None
-        self.preceding_constraint = None
         self.loop_keyframe = None
         self.loop_constraint = None
         self.fixed = False
@@ -315,8 +309,8 @@ class KeyFrame(StereoFrame):
         return mappoints, measurements
 
     def _triangulate(self, matches):
-        pts_left = np.array([self.left.keypoints[m].pt for m in matches[:,0]])
-        pts_right = np.array([self.right.keypoints[m].pt for m in matches[:,1]])
+        pts_left = np.array([self.left.keypoints[m] for m in matches[:,0]])
+        pts_right = np.array([self.right.keypoints[m] for m in matches[:,1]])
 
         points = cv2.triangulatePoints(
             self.left.projection_matrix,
@@ -329,14 +323,13 @@ class KeyFrame(StereoFrame):
         return points
 
     def _match_key_points(self, matching_distance=40, max_row_distance=2.5, max_disparity=100):
-
         matches = self.params.descriptor_matcher.match(self.left.descriptors, self.right.descriptors)
         assert len(matches) > 0
 
         good_matches = []
         for m in matches:
-            pt1 = self.left.keypoints[m.queryIdx].pt
-            pt2 = self.right.keypoints[m.trainIdx].pt
+            pt1 = self.left.keypoints[m.queryIdx]
+            pt2 = self.right.keypoints[m.trainIdx]
             if (m.distance < matching_distance and 
                 abs(pt1[1] - pt2[1]) < max_row_distance and 
                 abs(pt1[0] - pt2[0]) < max_disparity):   # epipolar constraint
@@ -352,11 +345,8 @@ class KeyFrame(StereoFrame):
     def mappoints(self):
         return self.meas.values()
 
-    def update_preceding(self, preceding=None):
-        if preceding is not None:
-            self.preceding_keyframe = preceding
-        self.preceding_constraint = (
-            self.preceding_keyframe.pose.inverse() * self.pose)
+    def update_preceding(self, preceding):
+        self.preceding_keyframe = preceding
 
     def is_fixed(self):
         return self.fixed
