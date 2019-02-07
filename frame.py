@@ -256,33 +256,12 @@ class StereoFrame:
         self.projection_matrix = (
             self.cam.intrinsic.dot(self.transform_matrix))
             
-        self.right.update_pose(pose)
-        self.left.update_pose(
+        self.left.update_pose(pose)
+        self.right.update_pose(
             self.cam.compute_right_camera_pose(pose))
 
-    # batch version
-    def can_view(self, mappoints):
-        points = []
-        point_normals = []
-        for i, p in enumerate(mappoints):
-            points.append(p.position)
-            point_normals.append(p.normal)
-        points = np.asarray(points)
-        point_normals = np.asarray(point_normals)
-
-        normals = points - self.position
-        normals /= np.linalg.norm(normals, axis=-1, keepdims=True)
-        cos = np.clip(np.sum(point_normals * normals, axis=1), -1, 1)
-        parallel = np.arccos(cos) < (np.pi / 4)
-
-        can_view = np.logical_or(
-            self.left.can_view(points),
-            self.right.can_view(points))
-
-        return np.logical_and(parallel, can_view)
-
     def to_keyframe(self):
-        return KeyFrame(
+        return KeyFrame(self, 
             self.idx, self.pose,
             self.cam, self.params, self.left.image, self.right.image, self.right.cam)
 
@@ -291,10 +270,9 @@ class KeyFrame:
     _id = 0
     _id_lock = Lock()
 
-    def __init__(self, idx, pose, cam, params, img_left, img_right,
+    def __init__(self, stereo_frame, idx, pose, cam, params, img_left, img_right,
                  right_cam=None, timestamp=None):
-        # StereoFrame.__init__(self, idx, pose, cam, params, img_left, img_right,
-        #          right_cam=right_cam, timestamp=timestamp)
+
         self.meas = dict()
 
         with KeyFrame._id_lock:
@@ -307,11 +285,10 @@ class KeyFrame:
         self.loop_constraint = None
         self.fixed = False
 
-        self.image = img_left
-        self.left = Frame(idx, pose, cam, params, img_left, timestamp)
-        self.right = Frame(idx, cam.compute_right_camera_pose(pose),
-                           right_cam or cam,
-                           params, img_right, timestamp)
+        self.image = stereo_frame.left.image
+
+        self.left = stereo_frame.left
+        self.right = stereo_frame.right
 
         self.idx = idx
         self.pose = pose    # g2o.Isometry3d
@@ -328,7 +305,7 @@ class KeyFrame:
             self.cam.intrinsic.dot(self.transform_matrix))  # from world frame to image
 
     def transform(self, points):    # from world coordinates
-        return self.left.transform
+        return self.left.transform(points)
 
     def update_pose(self, pose):
         if isinstance(pose, g2o.SE3Quat):
