@@ -158,36 +158,13 @@ class Frame(object):
 class StereoFrame:
     def __init__(self, idx, pose, cam, params, img_left, img_right,
                  right_cam=None, timestamp=None):
-
-        # super().__init__(idx, pose, cam, params, img_left, timestamp)
-        self.image = img_left
         self.left = Frame(idx, pose, cam, params, img_left, timestamp)
         self.right = Frame(idx, cam.compute_right_camera_pose(pose),
                            right_cam or cam,
                            params, img_right, timestamp)
 
-        self.idx = idx
-        self.pose = pose    # g2o.Isometry3d
-        self.cam = cam
-        self.timestamp = timestamp
-        self.params = params
-
-        self.matcher = params.descriptor_matcher
-        
-        self.orientation = pose.orientation()
-        self.position = pose.position()
-        self.transform_matrix = pose.inverse().matrix()[:3]  # shape: (3, 4)
-        self.projection_matrix = (
-            self.cam.intrinsic.dot(self.transform_matrix))  # from world frame to image
-
-
     def transform(self, points):    # from world coordinates
-        '''
-        Transform points from world coordinates frame to camera frame.
-        Args:
-            points: a point or an array of points, of shape (3,) or (3, N).
-        '''
-        return self.left.transform
+        return self.left.transform(points)
 
     def match_mappoints(self, mappoints, source):
 
@@ -243,19 +220,40 @@ class StereoFrame:
                 measurements.append(meas)
 
         return measurements
+    
+    @property
+    def image(self):
+        return self.left.image
+
+    @property
+    def position(self):
+        return self.left.pose.position()
+
+    @property
+    def orientation(self):
+        return self.left.pose.orientation()
+
+    @property
+    def pose(self):
+        return self.left.pose
+
+    @property
+    def params(self):
+        return self.left.params
+
+    @property
+    def cam(self):
+        return self.left.cam
+
+    @property
+    def idx(self):
+        return self.left.idx
+
+    @property
+    def timestamp(self):
+        return self.left.timestamp
 
     def update_pose(self, pose):
-        if isinstance(pose, g2o.SE3Quat):
-            self.pose = g2o.Isometry3d(pose.orientation(), pose.position())
-        else:
-            self.pose = pose
-        self.orientation = self.pose.orientation()
-        self.position = self.pose.position()
-
-        self.transform_matrix = self.pose.inverse().matrix()[:3]
-        self.projection_matrix = (
-            self.cam.intrinsic.dot(self.transform_matrix))
-            
         self.left.update_pose(pose)
         self.right.update_pose(
             self.cam.compute_right_camera_pose(pose))
