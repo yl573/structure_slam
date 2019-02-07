@@ -160,6 +160,7 @@ class StereoFrame:
                  right_cam=None, timestamp=None):
 
         # super().__init__(idx, pose, cam, params, img_left, timestamp)
+        self.image = img_left
         self.left = Frame(idx, pose, cam, params, img_left, timestamp)
         self.right = Frame(idx, cam.compute_right_camera_pose(pose),
                            right_cam or cam,
@@ -185,6 +186,15 @@ class StereoFrame:
         self.transform_matrix = pose.inverse().matrix()[:3]  # shape: (3, 4)
         self.projection_matrix = (
             self.cam.intrinsic.dot(self.transform_matrix))  # from world frame to image
+
+
+    def transform(self, points):    # from world coordinates
+        '''
+        Transform points from world coordinates frame to camera frame.
+        Args:
+            points: a point or an array of points, of shape (3,) or (3, N).
+        '''
+        return self.left.transform
 
     def match_mappoints(self, mappoints, source):
 
@@ -244,7 +254,8 @@ class StereoFrame:
     def create_mappoints_from_triangulation(self):
 
         mappoints, matches = self.triangulate_points(self.left.keypoints, self.left.descriptors, 
-                                                     self.right.keypoints, self.right.descriptors)
+                                                     self.right.keypoints, self.right.descriptors,
+                                                     self.left.colors)
 
         measurements = []
         for mappoint, (i, j) in zip(mappoints, matches):
@@ -275,7 +286,7 @@ class StereoFrame:
                 good.append(m)
         return good
 
-    def triangulate_points(self, kps_left, desps_left, kps_right, desps_right):
+    def triangulate_points(self, kps_left, desps_left, kps_right, desps_right, colors):
         matches = self.row_match(
             kps_left, desps_left, kps_right, desps_right)
         assert len(matches) > 0
@@ -305,14 +316,24 @@ class StereoFrame:
             normal = normal / np.linalg.norm(normal)
 
             mappoint = MapPoint(
-                point, normal, desps_left[matches[i].queryIdx], self.colors[i])
+                point, normal, desps_left[matches[i].queryIdx], colors[matches[i].queryIdx])
             mappoints.append(mappoint)
             matchs.append((matches[i].queryIdx, matches[i].trainIdx))
 
         return mappoints, matchs
 
     def update_pose(self, pose):
-        super().update_pose(pose)
+        if isinstance(pose, g2o.SE3Quat):
+            self.pose = g2o.Isometry3d(pose.orientation(), pose.position())
+        else:
+            self.pose = pose
+        self.orientation = self.pose.orientation()
+        self.position = self.pose.position()
+
+        self.transform_matrix = self.pose.inverse().matrix()[:3]
+        self.projection_matrix = (
+            self.cam.intrinsic.dot(self.transform_matrix))
+            
         self.right.update_pose(pose)
         self.left.update_pose(
             self.cam.compute_right_camera_pose(pose))
