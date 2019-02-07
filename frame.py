@@ -155,16 +155,36 @@ class Frame(object):
         return colors
 
 
-class StereoFrame(Frame):
+class StereoFrame:
     def __init__(self, idx, pose, cam, params, img_left, img_right,
                  right_cam=None, timestamp=None):
 
-        super().__init__(idx, pose, cam, params, img_left, timestamp)
+        # super().__init__(idx, pose, cam, params, img_left, timestamp)
         self.left = Frame(idx, pose, cam, params, img_left, timestamp)
         self.right = Frame(idx, cam.compute_right_camera_pose(pose),
                            right_cam or cam,
                            params, img_right, timestamp)
 
+        self.idx = idx
+        self.pose = pose    # g2o.Isometry3d
+        self.cam = cam
+        self.timestamp = timestamp
+        self.params = params
+
+        self.detector = params.feature_detector
+        self.extractor = params.descriptor_extractor
+        self.matcher = params.descriptor_matcher
+
+        self.cell_size = params.matching_cell_size
+        self.distance = params.matching_distance
+        self.neighborhood = (
+            params.matching_cell_size * params.matching_neighborhood)
+        
+        self.orientation = pose.orientation()
+        self.position = pose.position()
+        self.transform_matrix = pose.inverse().matrix()[:3]  # shape: (3, 4)
+        self.projection_matrix = (
+            self.cam.intrinsic.dot(self.transform_matrix))  # from world frame to image
 
     def match_mappoints(self, mappoints, source):
 
