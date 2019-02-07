@@ -29,11 +29,11 @@ class Tracker(object):
         self.max_iterations = params.pnp_max_iterations
 
     def initialize(self, frame):
-        mappoints, measurements = frame.create_mappoints_from_triangulation()
+        keyframe = frame.to_keyframe()
+        mappoints, measurements = keyframe.create_mappoints_from_triangulation()
         assert len(mappoints) >= self.params.init_min_points, (
             'Not enough points to initialize map.')
 
-        keyframe = frame.to_keyframe()
         keyframe.set_fixed(True)
         self.map.add_keyframe(keyframe)
         for mappoint, measurement in zip(mappoints, measurements):

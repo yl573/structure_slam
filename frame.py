@@ -172,14 +172,7 @@ class StereoFrame:
         self.timestamp = timestamp
         self.params = params
 
-        self.detector = params.feature_detector
-        self.extractor = params.descriptor_extractor
         self.matcher = params.descriptor_matcher
-
-        self.cell_size = params.matching_cell_size
-        self.distance = params.matching_distance
-        self.neighborhood = (
-            params.matching_cell_size * params.matching_neighborhood)
         
         self.orientation = pose.orientation()
         self.position = pose.position()
@@ -251,6 +244,108 @@ class StereoFrame:
 
         return measurements
 
+    def update_pose(self, pose):
+        if isinstance(pose, g2o.SE3Quat):
+            self.pose = g2o.Isometry3d(pose.orientation(), pose.position())
+        else:
+            self.pose = pose
+        self.orientation = self.pose.orientation()
+        self.position = self.pose.position()
+
+        self.transform_matrix = self.pose.inverse().matrix()[:3]
+        self.projection_matrix = (
+            self.cam.intrinsic.dot(self.transform_matrix))
+            
+        self.right.update_pose(pose)
+        self.left.update_pose(
+            self.cam.compute_right_camera_pose(pose))
+
+    # batch version
+    def can_view(self, mappoints):
+        points = []
+        point_normals = []
+        for i, p in enumerate(mappoints):
+            points.append(p.position)
+            point_normals.append(p.normal)
+        points = np.asarray(points)
+        point_normals = np.asarray(point_normals)
+
+        normals = points - self.position
+        normals /= np.linalg.norm(normals, axis=-1, keepdims=True)
+        cos = np.clip(np.sum(point_normals * normals, axis=1), -1, 1)
+        parallel = np.arccos(cos) < (np.pi / 4)
+
+        can_view = np.logical_or(
+            self.left.can_view(points),
+            self.right.can_view(points))
+
+        return np.logical_and(parallel, can_view)
+
+    def to_keyframe(self):
+        return KeyFrame(
+            self.idx, self.pose,
+            self.cam, self.params, self.left.image, self.right.image, self.right.cam)
+
+
+class KeyFrame:
+    _id = 0
+    _id_lock = Lock()
+
+    def __init__(self, idx, pose, cam, params, img_left, img_right,
+                 right_cam=None, timestamp=None):
+        # StereoFrame.__init__(self, idx, pose, cam, params, img_left, img_right,
+        #          right_cam=right_cam, timestamp=timestamp)
+        self.meas = dict()
+
+        with KeyFrame._id_lock:
+            self.id = KeyFrame._id
+            KeyFrame._id += 1
+
+        self.preceding_keyframe = None
+        self.preceding_constraint = None
+        self.loop_keyframe = None
+        self.loop_constraint = None
+        self.fixed = False
+
+        self.image = img_left
+        self.left = Frame(idx, pose, cam, params, img_left, timestamp)
+        self.right = Frame(idx, cam.compute_right_camera_pose(pose),
+                           right_cam or cam,
+                           params, img_right, timestamp)
+
+        self.idx = idx
+        self.pose = pose    # g2o.Isometry3d
+        self.cam = cam
+        self.timestamp = timestamp
+        self.params = params
+
+        self.matcher = params.descriptor_matcher
+        
+        self.orientation = pose.orientation()
+        self.position = pose.position()
+        self.transform_matrix = pose.inverse().matrix()[:3]  # shape: (3, 4)
+        self.projection_matrix = (
+            self.cam.intrinsic.dot(self.transform_matrix))  # from world frame to image
+
+    def transform(self, points):    # from world coordinates
+        return self.left.transform
+
+    def update_pose(self, pose):
+        if isinstance(pose, g2o.SE3Quat):
+            self.pose = g2o.Isometry3d(pose.orientation(), pose.position())
+        else:
+            self.pose = pose
+        self.orientation = self.pose.orientation()
+        self.position = self.pose.position()
+
+        self.transform_matrix = self.pose.inverse().matrix()[:3]
+        self.projection_matrix = (
+            self.cam.intrinsic.dot(self.transform_matrix))
+            
+        self.right.update_pose(pose)
+        self.left.update_pose(
+            self.cam.compute_right_camera_pose(pose))
+
     def create_mappoints_from_triangulation(self):
 
         mappoints, matches = self.triangulate_points(self.left.keypoints, self.left.descriptors, 
@@ -321,67 +416,6 @@ class StereoFrame:
             matchs.append((matches[i].queryIdx, matches[i].trainIdx))
 
         return mappoints, matchs
-
-    def update_pose(self, pose):
-        if isinstance(pose, g2o.SE3Quat):
-            self.pose = g2o.Isometry3d(pose.orientation(), pose.position())
-        else:
-            self.pose = pose
-        self.orientation = self.pose.orientation()
-        self.position = self.pose.position()
-
-        self.transform_matrix = self.pose.inverse().matrix()[:3]
-        self.projection_matrix = (
-            self.cam.intrinsic.dot(self.transform_matrix))
-            
-        self.right.update_pose(pose)
-        self.left.update_pose(
-            self.cam.compute_right_camera_pose(pose))
-
-    # batch version
-    def can_view(self, mappoints):
-        points = []
-        point_normals = []
-        for i, p in enumerate(mappoints):
-            points.append(p.position)
-            point_normals.append(p.normal)
-        points = np.asarray(points)
-        point_normals = np.asarray(point_normals)
-
-        normals = points - self.position
-        normals /= np.linalg.norm(normals, axis=-1, keepdims=True)
-        cos = np.clip(np.sum(point_normals * normals, axis=1), -1, 1)
-        parallel = np.arccos(cos) < (np.pi / 4)
-
-        can_view = np.logical_or(
-            self.left.can_view(points),
-            self.right.can_view(points))
-
-        return np.logical_and(parallel, can_view)
-
-    def to_keyframe(self):
-        return KeyFrame(
-            self.idx, self.pose,
-            self.cam, self.params, self.left.image, self.right.image, self.right.cam)
-
-
-class KeyFrame(StereoFrame):
-    _id = 0
-    _id_lock = Lock()
-
-    def __init__(self, *args, **kwargs):
-        StereoFrame.__init__(self, *args, **kwargs)
-        self.meas = dict()
-
-        with KeyFrame._id_lock:
-            self.id = KeyFrame._id
-            KeyFrame._id += 1
-
-        self.preceding_keyframe = None
-        self.preceding_constraint = None
-        self.loop_keyframe = None
-        self.loop_constraint = None
-        self.fixed = False
 
     def add_measurement(self, m):
         self.meas[m] = m.mappoint
