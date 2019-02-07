@@ -490,7 +490,7 @@ class Measurement:
         self.view = None    # mappoint's position in current coordinates frame
 
         self.xy = np.array(self.keypoints[0].pt)
-        if self.is_stereo():
+        if self.type == self.Source.STEREO:
             self.xyx = np.array([
                 *keypoints[0].pt, keypoints[1].pt[0]])
 
