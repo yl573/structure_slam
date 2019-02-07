@@ -39,7 +39,7 @@ class Frame(object):
         self.keypoints = self.detector.detect(self.image)
         self.keypoints, self.descriptors = self.extractor.compute(
             self.image, self.keypoints)
-        self.colors = self.get_color(self.keypoints)
+        self.colors = self.get_color(self.keypoints, self.image)
 
     # batch version
 
@@ -147,12 +147,12 @@ class Frame(object):
     def get_descriptor(self, i):
         return self.descriptors[i]
 
-    def get_color(self, kps):
+    def get_color(self, kps, img):
         colors = []
         for kp in kps:
             x = int(np.clip(kp.pt[0], 0, self.width-1))
             y = int(np.clip(kp.pt[1], 0, self.height-1))
-            colors.append(self.image[y, x] / 255)
+            colors.append(img[y, x] / 255)
         return colors
 
 
