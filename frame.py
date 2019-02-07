@@ -255,8 +255,7 @@ class StereoFrame:
 
     def update_pose(self, pose):
         self.left.update_pose(pose)
-        self.right.update_pose(
-            self.cam.compute_right_camera_pose(pose))
+        self.right.update_pose(self.cam.compute_right_camera_pose(pose))
 
     def to_keyframe(self):
         return KeyFrame(self)
@@ -267,6 +266,8 @@ class KeyFrame:
     _id_lock = Lock()
 
     def __init__(self, stereo_frame):
+        # super().__init__(frame.idx, frame.pose, frame.cam, frame.params, frame/, img_right,
+        #          right_cam=None, timestamp=None)
 
         self.meas = dict()
 
@@ -295,71 +296,65 @@ class KeyFrame:
         
         self.orientation = self.pose.orientation()
         self.position = self.pose.position()
-        self.transform_matrix = self.pose.inverse().matrix()[:3]  # shape: (3, 4)
-        self.projection_matrix = (
-            self.cam.intrinsic.dot(self.transform_matrix))  # from world frame to image
 
     def transform(self, points):    # from world coordinates
         return self.left.transform(points)
 
     def update_pose(self, pose):
-        if isinstance(pose, g2o.SE3Quat):
-            self.pose = g2o.Isometry3d(pose.orientation(), pose.position())
-        else:
-            self.pose = pose
+        self.pose = pose
         self.orientation = self.pose.orientation()
         self.position = self.pose.position()
-
-        self.transform_matrix = self.pose.inverse().matrix()[:3]
-        self.projection_matrix = (
-            self.cam.intrinsic.dot(self.transform_matrix))
             
         self.right.update_pose(pose)
-        self.left.update_pose(
-            self.cam.compute_right_camera_pose(pose))
+        self.left.update_pose(self.cam.compute_right_camera_pose(pose))
 
-    # def match_key_points(self):
-    #     matches = match_point_descriptors(self.left.points, self.right.points,
-    #                                       self.left.point_descriptors,
-    #                                       self.right.point_descriptors)
-    #     left_matched_pts = self.l_frame.points[matches[:, 0]]
-    #     right_matched_pts = self.r_frame.points[matches[:, 1]]
-    #     left_matched_des = self.l_frame.point_descriptors[matches[:, 0]]
-    #     right_matched_des = self.r_frame.point_descriptors[matches[:, 1]]
-    #     return left_matched_pts, right_matched_pts, left_matched_des, right_matched_des
+    def match_key_points(self):
+        matches = self.row_match(self.left.keypoints, self.left.descriptors, self.right.keypoints, self.right.descriptors)
+        assert len(matches) > 0
+        matches = np.array([[m.queryIdx, m.trainIdx] for m in matches])
+        return matches
 
-    # def create_map_points_from_triangulation(self):
-    #     kps_left, kps_right, des_left, des_right = self.match_key_points()
-    #     pts_3d = self.triangulate_points(kps_left, kps_right)
+    def triangulate(self, matches):
+        pts_left = np.array([self.left.keypoints[m].pt for m in matches[:,0]])
+        pts_right = np.array([self.right.keypoints[m].pt for m in matches[:,1]])
 
-    #     can_view = np.logical_and(
-    #         self.l_frame.can_view(pts_3d),
-    #         self.r_frame.can_view(pts_3d))
+        points = cv2.triangulatePoints(
+            self.left.projection_matrix,
+            self.right.projection_matrix,
+            pts_left.transpose(),
+            pts_right.transpose()
+        ).transpose()  # shape: (N, 4)
+        points = points[:, :3] / points[:, 3:]
 
-    #     map_points = []
-    #     observations = []
-    #     for i, (pt_3d, kp_left, kp_right, des) in enumerate(zip(pts_3d, kps_left, kps_right, des_left)):
-    #         if not can_view[i]:
-    #             continue
-    #         map_point = MapPoint(pt_3d, des)
-    #         obs = Observation(map_point, kp_left, kp_right)
-    #         map_points.append(map_point)
-    #         observations.append(obs)
-    #     return map_points, observations
+        return points
 
     def create_mappoints_from_triangulation(self):
-        mappoints, matches = self.triangulate_points(self.left.keypoints, self.left.descriptors, 
-                                                     self.right.keypoints, self.right.descriptors,
-                                                     self.left.colors)
+        matches = self.match_key_points()
+        points_3d = self.triangulate(matches)
+
+        can_view = np.logical_and(
+            self.left.can_view(points_3d),
+            self.right.can_view(points_3d))
+
+        points_3d = points_3d[can_view]
+        matches = matches[can_view]
+
+        mappoints = []
+        for point, match in zip(points_3d, matches):
+            normal = point - self.position
+            normal = normal / np.linalg.norm(normal)
+            mappoint = MapPoint(
+                point, normal, self.left.descriptors[match[0]], self.left.colors[match[0]])
+            mappoints.append(mappoint)
 
         measurements = []
-        for mappoint, (i, j) in zip(mappoints, matches):
+        for mappoint, match in zip(mappoints, matches):
             meas = Measurement(
                 Measurement.Type.STEREO,
                 Measurement.Source.TRIANGULATION,
                 mappoint,
-                [self.left.keypoints[i], self.right.keypoints[j]],
-                [self.left.descriptors[i], self.right.descriptors[j]])
+                [self.left.keypoints[match[0]], self.right.keypoints[match[1]]],
+                [self.left.descriptors[match[0]], self.right.descriptors[match[1]]])
             meas.view = self.transform(mappoint.position)
             measurements.append(meas)
 
@@ -380,42 +375,6 @@ class KeyFrame:
                 abs(pt1[0] - pt2[0]) < max_disparity):   # epipolar constraint
                 good.append(m)
         return good
-
-    def triangulate_points(self, kps_left, desps_left, kps_right, desps_right, colors):
-        matches = self.row_match(
-            kps_left, desps_left, kps_right, desps_right)
-        assert len(matches) > 0
-
-        px_left = np.array([kps_left[m.queryIdx].pt for m in matches])
-        px_right = np.array([kps_right[m.trainIdx].pt for m in matches])
-
-        points = cv2.triangulatePoints(
-            self.left.projection_matrix,
-            self.right.projection_matrix,
-            px_left.transpose(),
-            px_right.transpose()
-        ).transpose()  # shape: (N, 4)
-
-        points = points[:, :3] / points[:, 3:]
-
-        can_view = np.logical_and(
-            self.left.can_view(points),
-            self.right.can_view(points))
-
-        mappoints = []
-        matchs = []
-        for i, point in enumerate(points):
-            if not can_view[i]:
-                continue
-            normal = point - self.position
-            normal = normal / np.linalg.norm(normal)
-
-            mappoint = MapPoint(
-                point, normal, desps_left[matches[i].queryIdx], colors[matches[i].queryIdx])
-            mappoints.append(mappoint)
-            matchs.append((matches[i].queryIdx, matches[i].trainIdx))
-
-        return mappoints, matchs
 
     def add_measurement(self, m):
         self.meas[m] = m.mappoint
