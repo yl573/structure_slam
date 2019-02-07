@@ -8,7 +8,7 @@ from mapping import Map
 from optimization import BundleAdjustment
 from frame import Measurement
 from motion import MotionModel
-from frame import StereoFrame
+from frame import StereoFrame, Frame
 import g2o
 
 
@@ -65,7 +65,10 @@ class Tracker(object):
     
     def update(self, i, left_img, right_img, timestamp):
 
-        frame = StereoFrame(i, g2o.Isometry3d(), self.cam, self.params, left_img, right_img, timestamp=timestamp)
+        origin = g2o.Isometry3d()
+        left_frame = Frame(i, origin, self.cam, self.params, left_img, timestamp)
+        right_frame = Frame(i, self.cam.compute_right_camera_pose(origin), self.cam, self.params, right_img, timestamp)
+        frame = StereoFrame(left_frame, right_frame)
 
         if i == 0:
             self.initialize(frame)

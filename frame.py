@@ -8,6 +8,7 @@ from queue import Queue
 from enum import Enum
 from collections import defaultdict
 from numbers import Number
+from map_point import MapPoint, Measurement
 
 
 class Frame(object):
@@ -156,12 +157,10 @@ class Frame(object):
 
 
 class StereoFrame:
-    def __init__(self, idx, pose, cam, params, img_left, img_right,
-                 right_cam=None, timestamp=None):
-        self.left = Frame(idx, pose, cam, params, img_left, timestamp)
-        self.right = Frame(idx, cam.compute_right_camera_pose(pose),
-                           right_cam or cam,
-                           params, img_right, timestamp)
+
+    def __init__(self, left_frame, right_frame):
+        self.left = left_frame
+        self.right = right_frame
 
     def transform(self, points):    # from world coordinates
         return self.left.transform(points)
@@ -261,13 +260,15 @@ class StereoFrame:
         return KeyFrame(self)
 
 
-class KeyFrame:
+class KeyFrame(StereoFrame):
     _id = 0
     _id_lock = Lock()
 
     def __init__(self, stereo_frame):
         # super().__init__(frame.idx, frame.pose, frame.cam, frame.params, frame/, img_right,
         #          right_cam=None, timestamp=None)
+
+        super().__init__(stereo_frame.left, stereo_frame.right)
 
         self.meas = dict()
 
@@ -281,56 +282,12 @@ class KeyFrame:
         self.loop_constraint = None
         self.fixed = False
 
-        self.image = stereo_frame.left.image
-
-        self.left = stereo_frame.left
-        self.right = stereo_frame.right
-
-        self.idx = stereo_frame.idx
-        self.pose = stereo_frame.pose    # g2o.Isometry3d
-        self.cam = stereo_frame.cam
-        self.timestamp = stereo_frame.timestamp
-        self.params = stereo_frame.params
-
-        self.matcher = self.params.descriptor_matcher
-        
-        self.orientation = self.pose.orientation()
-        self.position = self.pose.position()
-
     def transform(self, points):    # from world coordinates
         return self.left.transform(points)
 
-    def update_pose(self, pose):
-        self.pose = pose
-        self.orientation = self.pose.orientation()
-        self.position = self.pose.position()
-            
-        self.right.update_pose(pose)
-        self.left.update_pose(self.cam.compute_right_camera_pose(pose))
-
-    def match_key_points(self):
-        matches = self.row_match(self.left.keypoints, self.left.descriptors, self.right.keypoints, self.right.descriptors)
-        assert len(matches) > 0
-        matches = np.array([[m.queryIdx, m.trainIdx] for m in matches])
-        return matches
-
-    def triangulate(self, matches):
-        pts_left = np.array([self.left.keypoints[m].pt for m in matches[:,0]])
-        pts_right = np.array([self.right.keypoints[m].pt for m in matches[:,1]])
-
-        points = cv2.triangulatePoints(
-            self.left.projection_matrix,
-            self.right.projection_matrix,
-            pts_left.transpose(),
-            pts_right.transpose()
-        ).transpose()  # shape: (N, 4)
-        points = points[:, :3] / points[:, 3:]
-
-        return points
-
     def create_mappoints_from_triangulation(self):
-        matches = self.match_key_points()
-        points_3d = self.triangulate(matches)
+        matches = self._match_key_points()
+        points_3d = self._triangulate(matches)
 
         can_view = np.logical_and(
             self.left.can_view(points_3d),
@@ -360,21 +317,34 @@ class KeyFrame:
 
         return mappoints, measurements
 
-    def row_match(self, kps1, desps1, kps2, desps2,
-            matching_distance=40, 
-            max_row_distance=2.5, 
-            max_disparity=100):
+    def _triangulate(self, matches):
+        pts_left = np.array([self.left.keypoints[m].pt for m in matches[:,0]])
+        pts_right = np.array([self.right.keypoints[m].pt for m in matches[:,1]])
 
-        matches = self.matcher.match(np.array(desps1), np.array(desps2))
-        good = []
+        points = cv2.triangulatePoints(
+            self.left.projection_matrix,
+            self.right.projection_matrix,
+            pts_left.transpose(),
+            pts_right.transpose()
+        ).transpose()  # shape: (N, 4)
+        points = points[:, :3] / points[:, 3:]
+
+        return points
+
+    def _match_key_points(self, matching_distance=40, max_row_distance=2.5, max_disparity=100):
+
+        matches = self.params.descriptor_matcher.match(self.left.descriptors, self.right.descriptors)
+        assert len(matches) > 0
+
+        good_matches = []
         for m in matches:
-            pt1 = kps1[m.queryIdx].pt
-            pt2 = kps2[m.trainIdx].pt
+            pt1 = self.left.keypoints[m.queryIdx].pt
+            pt2 = self.right.keypoints[m.trainIdx].pt
             if (m.distance < matching_distance and 
                 abs(pt1[1] - pt2[1]) < max_row_distance and 
                 abs(pt1[0] - pt2[0]) < max_disparity):   # epipolar constraint
-                good.append(m)
-        return good
+                good_matches.append([m.queryIdx, m.trainIdx])
+        return np.array(good_matches)
 
     def add_measurement(self, m):
         self.meas[m] = m.mappoint
@@ -396,126 +366,3 @@ class KeyFrame:
 
     def set_fixed(self, fixed=True):
         self.fixed = fixed
-
-
-class MapPoint:
-    _id = 0
-    _id_lock = Lock()
-
-    def __init__(self, position, normal, descriptor,
-                 color=np.zeros(3),
-                 covariance=np.identity(3) * 1e-4):
-
-        with MapPoint._id_lock:
-            self.id = MapPoint._id
-            MapPoint._id += 1
-
-        self.position = position
-        self.normal = normal
-        self.descriptor = descriptor
-        self.covariance = covariance
-        self.color = color
-        self.meas = list()
-
-        self.count = defaultdict(int)
-
-    def measurements(self):
-        return list(self.meas)
-
-    def add_measurement(self, m):
-        self.meas.append(m)
-
-    def update_position(self, position):
-        self.position = position
-
-    def update_normal(self, normal):
-        self.normal = normal
-
-    def update_descriptor(self, descriptor):
-        self.descriptor = descriptor
-
-    def set_color(self, color):
-        self.color = color
-
-    def is_bad(self):
-        status = (
-            self.count['meas'] == 0
-            or (self.count['outlier'] > 20
-                and self.count['outlier'] > self.count['inlier'])
-            or (self.count['proj'] > 20
-                and self.count['proj'] > self.count['meas'] * 10))
-        return status
-
-    def increase_outlier_count(self):
-        self.count['outlier'] += 1
-
-    def increase_inlier_count(self):
-        self.count['inlier'] += 1
-
-    def increase_projection_count(self):
-        self.count['proj'] += 1
-
-    def increase_measurement_count(self):
-        self.count['meas'] += 1
-
-
-class Measurement:
-
-    Source = Enum('Measurement.Source', [
-                  'TRIANGULATION', 'TRACKING', 'REFIND'])
-    Type = Enum('Measurement.Type', ['STEREO', 'LEFT', 'RIGHT'])
-
-    def __init__(self, type, source, mappoint, keypoints, descriptors):
-        super().__init__()
-
-        self.mappoint = mappoint
-
-        self.type = type
-        self.source = source
-        self.keypoints = keypoints
-        self.descriptors = descriptors
-        self.view = None    # mappoint's position in current coordinates frame
-
-        self.xy = np.array(self.keypoints[0].pt)
-        if self.type == self.Type.STEREO:
-            self.xyx = np.array([
-                *keypoints[0].pt, keypoints[1].pt[0]])
-
-        self.triangulation = (source == self.Source.TRIANGULATION)
-
-    @property
-    def id(self):
-        return (self.keyframe.id, self.mappoint.id)
-
-    def __hash__(self):
-        return hash(self.id)
-
-    def get_descriptor(self, i=0):
-        return self.descriptors[i]
-
-    def get_keypoint(self, i=0):
-        return self.keypoints[i]
-
-    def get_descriptors(self):
-        return self.descriptors
-
-    def get_keypoints(self):
-        return self.keypoints
-
-    def is_stereo(self):
-        return self.type == Measurement.Type.STEREO
-
-    def is_left(self):
-        return self.type == Measurement.Type.LEFT
-
-    def is_right(self):
-        return self.type == Measurement.Type.RIGHT
-
-    def from_triangulation(self):
-        return self.triangulation
-
-    def from_tracking(self):
-        return self.source == Measurement.Source.TRACKING
-
-    def from_refind(self):
-        return self.source == Measurement.Source.REFIND
