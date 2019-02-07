@@ -261,17 +261,14 @@ class StereoFrame:
             self.cam.compute_right_camera_pose(pose))
 
     def to_keyframe(self):
-        return KeyFrame(self, 
-            self.idx, self.pose,
-            self.cam, self.params, self.left.image, self.right.image, self.right.cam)
+        return KeyFrame(self)
 
 
 class KeyFrame:
     _id = 0
     _id_lock = Lock()
 
-    def __init__(self, stereo_frame, idx, pose, cam, params, img_left, img_right,
-                 right_cam=None, timestamp=None):
+    def __init__(self, stereo_frame):
 
         self.meas = dict()
 
@@ -290,17 +287,17 @@ class KeyFrame:
         self.left = stereo_frame.left
         self.right = stereo_frame.right
 
-        self.idx = idx
-        self.pose = pose    # g2o.Isometry3d
-        self.cam = cam
-        self.timestamp = timestamp
-        self.params = params
+        self.idx = stereo_frame.idx
+        self.pose = stereo_frame.pose    # g2o.Isometry3d
+        self.cam = stereo_frame.cam
+        self.timestamp = stereo_frame.timestamp
+        self.params = stereo_frame.params
 
-        self.matcher = params.descriptor_matcher
+        self.matcher = self.params.descriptor_matcher
         
-        self.orientation = pose.orientation()
-        self.position = pose.position()
-        self.transform_matrix = pose.inverse().matrix()[:3]  # shape: (3, 4)
+        self.orientation = self.pose.orientation()
+        self.position = self.pose.position()
+        self.transform_matrix = self.pose.inverse().matrix()[:3]  # shape: (3, 4)
         self.projection_matrix = (
             self.cam.intrinsic.dot(self.transform_matrix))  # from world frame to image
 
