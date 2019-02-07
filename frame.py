@@ -34,12 +34,11 @@ class Frame(object):
             self.cam.intrinsic.dot(self.transform_matrix))  # from world frame to image
 
         self.image = image
-        self.height, self.width = self.image.shape[:2]
+        self.height, self.width = image.shape[:2]
 
-        self.keypoints = self.detector.detect(self.image)
-        self.keypoints, self.descriptors = self.extractor.compute(
-            self.image, self.keypoints)
-        self.colors = self.get_color(self.keypoints, self.image)
+        self.keypoints = self.detector.detect(image)
+        self.keypoints, self.descriptors = self.extractor.compute(image, self.keypoints)
+        self.colors = self.get_color(self.keypoints, image)
 
     # batch version
 
