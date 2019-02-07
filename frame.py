@@ -282,9 +282,6 @@ class KeyFrame(StereoFrame):
         self.loop_constraint = None
         self.fixed = False
 
-    def transform(self, points):    # from world coordinates
-        return self.left.transform(points)
-
     def create_mappoints_from_triangulation(self):
         matches = self._match_key_points()
         points_3d = self._triangulate(matches)
