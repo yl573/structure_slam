@@ -8,7 +8,8 @@ from queue import Queue
 from enum import Enum
 from collections import defaultdict
 from numbers import Number
-from map_point import MapPoint, Measurement
+from primitives import MapPoint
+from map_point import Measurement
 
 
 class Frame(object):
