@@ -1,6 +1,6 @@
 import numpy as np
 from enum import Enum
-from primitives import MapLandmarkBase
+from primitives import MapLandmarkBase, MapPoint, MapLine
 
 
 class MeasurementSource(Enum):
@@ -54,7 +54,7 @@ class MeasurementBase:
         return self.source == MeasurementSource.REFIND
 
 
-class Measurement(MeasurementBase):
+class PointMeasurement(MeasurementBase):
 
     def __init__(self, measurement_type, source, mappoint, keypoints, descriptors):
 
@@ -69,7 +69,14 @@ class Measurement(MeasurementBase):
             self.xyx = np.array([
                 *keypoints[0], keypoints[1][0]])
 
-        self.mappoint = mappoint
+    @property
+    def mappoint(self):
+        return self.map_primitive
+
+    @mappoint.setter
+    def mappoint(self, value):
+        assert type(value) is MapPoint
+        self.map_primitive = value
 
     def get_descriptor(self, i=0):
         return self.descriptors[i]
@@ -84,3 +91,12 @@ class LineMeasurement(MeasurementBase):
         self.keylines = keylines
         self.descriptors = descriptors
         self.view = None    # mappoint's position in current coordinates frame
+
+    @property
+    def mapline(self):
+        return self.map_primitive
+
+    @mapline.setter
+    def mapline(self, value):
+        assert type(value) is MapLine
+        self.map_primitive = value

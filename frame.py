@@ -9,8 +9,7 @@ from enum import Enum
 from collections import defaultdict
 from numbers import Number
 from primitives import MapPoint
-from measurements import Measurement, MeasurementType, MeasurementSource
-# from map_point import Measurement
+from measurements import PointMeasurement, MeasurementType, MeasurementSource
 
 
 class Frame(object):
@@ -189,7 +188,7 @@ class StereoFrame:
                 if abs(y1 - y2) > 2.5:    # epipolar constraint
                     continue   # TODO: choose one
 
-                meas = Measurement(
+                meas = PointMeasurement(
                     MeasurementType.STEREO,
                     source,
                     mappoints[i],
@@ -201,7 +200,7 @@ class StereoFrame:
 
             # if only left is matched
             else:
-                meas = Measurement(
+                meas = PointMeasurement(
                     MeasurementType.LEFT,
                     source,
                     mappoints[i],
@@ -212,7 +211,7 @@ class StereoFrame:
         for i, j in matches_right.items():
             # if only right is matched
             if i not in matches_left:
-                meas = Measurement(
+                meas = PointMeasurement(
                     MeasurementType.RIGHT,
                     source,
                     mappoints[i],
@@ -299,7 +298,7 @@ class KeyFrame(StereoFrame):
 
         measurements = []
         for mappoint, match in zip(mappoints, matches):
-            meas = Measurement(
+            meas = PointMeasurement(
                 MeasurementType.STEREO,
                 MeasurementSource.TRIANGULATION,
                 mappoint,

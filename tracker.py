@@ -6,7 +6,6 @@ from collections import defaultdict
 
 from mapping import Map
 from optimization import BundleAdjustment
-# from frame import Measurement
 from measurements import MeasurementSource
 from motion import MotionModel
 from frame import StereoFrame, Frame
