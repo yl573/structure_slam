@@ -9,7 +9,8 @@ from enum import Enum
 from collections import defaultdict
 from numbers import Number
 from primitives import MapPoint
-from map_point import Measurement
+from measurements import Measurement, MeasurementType, MeasurementSource
+# from map_point import Measurement
 
 
 class Frame(object):
@@ -189,7 +190,7 @@ class StereoFrame:
                     continue   # TODO: choose one
 
                 meas = Measurement(
-                    Measurement.Type.STEREO,
+                    MeasurementType.STEREO,
                     source,
                     mappoints[i],
                     [self.left.get_keypoint(j),
@@ -201,7 +202,7 @@ class StereoFrame:
             # if only left is matched
             else:
                 meas = Measurement(
-                    Measurement.Type.LEFT,
+                    MeasurementType.LEFT,
                     source,
                     mappoints[i],
                     [self.left.get_keypoint(j)],
@@ -212,7 +213,7 @@ class StereoFrame:
             # if only right is matched
             if i not in matches_left:
                 meas = Measurement(
-                    Measurement.Type.RIGHT,
+                    MeasurementType.RIGHT,
                     source,
                     mappoints[i],
                     [self.right.get_keypoint(j)],
@@ -299,8 +300,8 @@ class KeyFrame(StereoFrame):
         measurements = []
         for mappoint, match in zip(mappoints, matches):
             meas = Measurement(
-                Measurement.Type.STEREO,
-                Measurement.Source.TRIANGULATION,
+                MeasurementType.STEREO,
+                MeasurementSource.TRIANGULATION,
                 mappoint,
                 [self.left.keypoints[match[0]], self.right.keypoints[match[1]]],
                 [self.left.descriptors[match[0]], self.right.descriptors[match[1]]])

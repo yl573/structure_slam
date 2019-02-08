@@ -1,6 +1,5 @@
 import numpy as np
 import g2o
-from frame import Measurement
 
 
 class BundleAdjustment(g2o.SparseOptimizer):
@@ -51,11 +50,11 @@ class BundleAdjustment(g2o.SparseOptimizer):
         super().add_vertex(v_p)
 
     def add_edge(self, id, point_id, pose_id, meas):
-        if meas.type == Measurement.Type.STEREO:
+        if meas.is_stereo():
             edge = self.stereo_edge(meas.xyx)
-        elif meas.type == Measurement.Type.LEFT:
+        elif meas.is_left():
             edge = self.mono_edge(meas.xy)
-        elif meas.type == Measurement.Type.RIGHT:
+        elif meas.is_right():
             edge = self.mono_edge_right(meas.xy)
 
         edge.set_id(id)

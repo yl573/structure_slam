@@ -17,12 +17,11 @@ class MeasurementType(Enum):
 
 class MeasurementBase:
 
-    def __init__(self, measurement_type, source, frame, map_primitive : MapLandmarkBase):
+    def __init__(self, measurement_type, source, map_primitive : MapLandmarkBase):
 
         self.type = measurement_type
         self.source = source
         self.map_primitive = map_primitive
-        self.frame = frame
 
         self.keyframe = None
 
@@ -55,11 +54,11 @@ class MeasurementBase:
         return self.source == MeasurementSource.REFIND
 
 
-class PointMeasurement(MeasurementBase):
+class Measurement(MeasurementBase):
 
-    def __init__(self, measurement_type, source, mappoint, frame, keypoints, descriptors):
+    def __init__(self, measurement_type, source, mappoint, keypoints, descriptors):
 
-        super().__init__(measurement_type, source, frame, mappoint)
+        super().__init__(measurement_type, source, mappoint)
 
         self.keypoints = keypoints
         self.descriptors = descriptors
@@ -69,6 +68,8 @@ class PointMeasurement(MeasurementBase):
         if self.is_stereo():
             self.xyx = np.array([
                 *keypoints[0], keypoints[1][0]])
+
+        self.mappoint = mappoint
 
     def get_descriptor(self, i=0):
         return self.descriptors[i]

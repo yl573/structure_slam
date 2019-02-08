@@ -6,7 +6,8 @@ from collections import defaultdict
 
 from mapping import Map
 from optimization import BundleAdjustment
-from frame import Measurement
+# from frame import Measurement
+from measurements import MeasurementSource
 from motion import MotionModel
 from frame import StereoFrame, Frame
 import g2o
@@ -80,7 +81,7 @@ class Tracker(object):
         frame.update_pose(predicted_pose)
 
         local_mappoints = self.get_local_map_points(frame)
-        measurements = frame.match_mappoints(local_mappoints, Measurement.Source.TRACKING)
+        measurements = frame.match_mappoints(local_mappoints, MeasurementSource.TRACKING)
 
         tracked_map = set()
         for m in measurements:
