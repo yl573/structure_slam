@@ -53,6 +53,12 @@ class MeasurementBase:
     def from_refind(self):
         return self.source == MeasurementSource.REFIND
 
+    def is_point(self):
+        return type(self) is PointMeasurement
+
+    def is_line(self):
+        return type(self) is LineMeasurement
+
 
 class PointMeasurement(MeasurementBase):
 
@@ -84,9 +90,9 @@ class PointMeasurement(MeasurementBase):
 
 class LineMeasurement(MeasurementBase):
 
-    def __init__(self, measurement_type, source, mapline, frame, keylines, descriptors):
+    def __init__(self, measurement_type, source, mapline, keylines, descriptors):
 
-        super().__init__(measurement_type, source, frame, mapline)
+        super().__init__(measurement_type, source, mapline)
 
         self.keylines = keylines
         self.descriptors = descriptors

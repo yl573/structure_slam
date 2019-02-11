@@ -31,15 +31,24 @@ class Tracker(object):
     def initialize(self, frame):
         keyframe = frame.to_keyframe()
         mappoints, measurements = keyframe.create_mappoints_from_triangulation()
+
         assert len(mappoints) >= self.params.init_min_points, (
             'Not enough points to initialize map.')
 
         keyframe.set_fixed(True)
         self.map.add_keyframe(keyframe)
+
         for mappoint, measurement in zip(mappoints, measurements):
             self.map.add_mappoint(mappoint)
-            self.map.add_measurement(keyframe, mappoint, measurement)
+            self.map.add_point_measurement(keyframe, mappoint, measurement)
             mappoint.increase_measurement_count()
+
+        maplines, line_measurements = keyframe.create_maplines_from_triangulation()
+        print(f'Initialized {len(maplines)} lines')
+        for mapline, measurement in zip(maplines, line_measurements):
+            self.map.add_mapline(mapline)
+            self.map.add_line_measurement(keyframe, mapline, measurement)
+            mapline.increase_measurement_count()
 
         self.preceding = keyframe
         self.current = keyframe
@@ -82,12 +91,21 @@ class Tracker(object):
         local_mappoints = self.get_local_map_points(frame)
         measurements = frame.match_mappoints(local_mappoints, MeasurementSource.TRACKING)
 
+        local_maplines = self.get_local_map_lines(frame)
+        line_measurements = frame.match_maplines(local_maplines, MeasurementSource.TRACKING)
+        frame.visualise_measurements(line_measurements)
+
         tracked_map = set()
         for m in measurements:
-            mappoint = m.mappoint
+            mappoint = m.get_map_primitive()
             mappoint.update_descriptor(m.get_descriptor())
             mappoint.increase_measurement_count()
             tracked_map.add(mappoint)
+
+        # for m in line_measurements:
+        #     mapline = m.mapline
+        #     mapline.update_descriptor(m.get_descriptor())
+        #     mapline.
         
         try:
             pose = self.refine_pose(frame.pose, self.cam, measurements)
@@ -99,6 +117,9 @@ class Tracker(object):
             print('tracking failed!!!')
 
         if tracking_is_ok and self.should_be_keyframe(frame, measurements):
+            self.create_new_keyframe(frame)
+
+    def create_new_keyframe(self, frame):
             keyframe = frame.to_keyframe()
             keyframe.update_preceding(self.preceding)
 
@@ -107,8 +128,15 @@ class Tracker(object):
 
             for mappoint, measurement in zip(mappoints, measurements):
                 self.map.add_mappoint(mappoint)
-                self.map.add_measurement(keyframe, mappoint, measurement)
+                self.map.add_point_measurement(keyframe, mappoint, measurement)
                 mappoint.increase_measurement_count()
+
+            maplines, line_measurements = keyframe.create_maplines_from_triangulation()
+            print(f'New Keyframe with {len(maplines)} lines')
+            for mapline, measurement in zip(maplines, line_measurements):
+                self.map.add_mapline(mapline)
+                self.map.add_line_measurement(keyframe, mapline, measurement)
+                mapline.increase_measurement_count()
             
             self.preceding = keyframe
 
@@ -122,6 +150,21 @@ class Tracker(object):
                 continue
             pt.increase_projection_count()
             filtered.append(pt)
+
+        return filtered
+
+    def get_local_map_lines(self, frame):
+        checked = set()
+        filtered = []
+
+        # Add in map points from preceding and reference
+        for ln in self.preceding.maplines():  # neglect can_view test
+            if ln in checked or ln.is_bad():
+                continue
+            ln.increase_projection_count()
+            filtered.append(ln)
+
+        print(f'Found {len(filtered)} local maplines')
 
         return filtered
 

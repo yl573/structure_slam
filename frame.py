@@ -8,8 +8,15 @@ from queue import Queue
 from enum import Enum
 from collections import defaultdict
 from numbers import Number
-from primitives import MapPoint
-from measurements import PointMeasurement, MeasurementType, MeasurementSource
+from primitives import MapPoint, MapLine
+from measurements import PointMeasurement, LineMeasurement, MeasurementType, MeasurementSource
+from line_algorithms import triangulate_lines
+import math
+
+
+class FeatureType(Enum):
+    Point = 0
+    Line = 1
 
 
 class Frame(object):
@@ -37,12 +44,25 @@ class Frame(object):
         self.height, self.width = image.shape[:2]
         self.keypoints, self.descriptors = self.extract_features(image)
         self.colors = self.get_color(self.keypoints, image)
+        self.unmatched_points = np.ones(len(self.keypoints), dtype=bool)
+
+        self.line_distance = params.line_matching_distance
+        self.line_detector = params.line_detector
+        self.line_extractor = params.line_extractor
+        self.keylines, self.line_descriptors = self.extract_lines(image)
+        self.unmatched_lines = np.ones(len(self.keylines), dtype=bool)
 
     def extract_features(self, image):
         keypoints = self.detector.detect(image)
         keypoints, descriptors = self.extractor.compute(image, keypoints)  
         keypoints = np.array([kp.pt for kp in keypoints])
         return keypoints, descriptors 
+
+    def extract_lines(self, image):
+        keylines = self.line_detector.detect(image)
+        keylines, line_descriptors = self.line_extractor.compute(image, keylines)  
+        keylines = np.array([[kl.startPointX, kl.startPointY, kl.endPointX, kl.endPointY] for kl in keylines])
+        return keylines, line_descriptors  
 
     def can_view(self, points, ground=False, margin=20):    # Frustum Culling
         points = np.transpose(points)
@@ -142,11 +162,44 @@ class Frame(object):
 
         return np.array(good_matches)
 
-    def get_keypoint(self, i):
-        return self.keypoints[i]
+    def find_line_matches(self, lines, descriptors):
 
-    def get_descriptor(self, i):
-        return self.descriptors[i]
+        matches = self.matcher.match(np.array(descriptors), self.line_descriptors)
+
+        good_matches = []
+
+        for m in matches:
+            # check that the match is the best for each key point
+            if m.distance > self.line_distance:
+                continue
+
+            good_matches.append([m.queryIdx, m.trainIdx])
+        
+        print(f'found {len(good_matches)} line matches')
+
+        return np.array(good_matches)
+
+    def get_feature(self, feature_type, i):
+        if feature_type == FeatureType.Point:
+            return self.keypoints[i]
+        elif feature_type == FeatureType.Line:
+            return self.keylines[i]
+        raise ValueError(f'{feature_type} is not a valid feature type')
+
+    def set_matched(self, feature_type, i):
+        if feature_type == FeatureType.Point:
+            self.unmatched_points[i] = False
+        elif feature_type == FeatureType.Line:
+            self.unmatched_lines[i] = False
+        else:
+            raise ValueError(f'{feature_type} is not a valid feature type')
+
+    def get_descriptor(self, feature_type, i):
+        if feature_type == FeatureType.Point:
+            return self.descriptors[i]
+        elif feature_type == FeatureType.Line:
+            return self.line_descriptors[i]
+        raise ValueError(f'{feature_type} is not a valid feature type')
 
     def get_color(self, kps, img):
         colors = []
@@ -166,6 +219,91 @@ class StereoFrame:
     def transform(self, points):    # from world coordinates
         return self.left.transform(points)
 
+    def create_measurements_from_matches(self, matches_left, matches_right, map_primitives, feature_type):
+
+        if feature_type == FeatureType.Point:
+            Measurement = PointMeasurement
+        elif feature_type == FeatureType.Line:
+            Measurement = LineMeasurement
+
+        measurements = []
+        for mappoint_id, left_id in matches_left.items():
+            # if match in both left and right
+            if mappoint_id in matches_right:
+                right_id = matches_right[mappoint_id]
+
+                meas = Measurement(
+                    MeasurementType.STEREO,
+                    MeasurementSource.TRACKING,
+                    map_primitives[mappoint_id],
+                    [self.left.get_feature(feature_type, left_id),
+                        self.right.get_feature(feature_type, right_id)],
+                    [self.left.get_descriptor(feature_type, left_id),
+                        self.right.get_descriptor(feature_type, right_id)])
+                measurements.append(meas)
+                self.left.set_matched(feature_type, left_id)
+                self.right.set_matched(feature_type, right_id)
+
+            # if only left is matched
+            else:
+                meas = Measurement(
+                    MeasurementType.LEFT,
+                    MeasurementSource.TRACKING,
+                    map_primitives[mappoint_id],
+                    [self.left.get_feature(feature_type, left_id)],
+                    [self.left.get_descriptor(feature_type, left_id)])
+                measurements.append(meas)
+                self.left.set_matched(feature_type, mappoint_id)
+
+        for mappoint_id, right_id in matches_right.items():
+            # if only right is matched
+            if mappoint_id not in matches_left:
+                meas = Measurement(
+                    MeasurementType.RIGHT,
+                    MeasurementSource.TRACKING,
+                    map_primitives[mappoint_id],
+                    [self.right.get_feature(feature_type, right_id)],
+                    [self.right.get_descriptor(feature_type, right_id)])
+                measurements.append(meas)
+                self.right.set_matched(feature_type, right_id)
+
+        return measurements
+
+    def visualise_measurements(self, measurements):
+
+        img = np.array(self.left.image)
+        for i, m in enumerate(measurements):
+            if m.type != MeasurementType.RIGHT:
+                left_keyline = m.keylines[0]
+
+                pt1 = tuple(left_keyline[:2].astype(int))
+                pt2 = tuple(left_keyline[2:].astype(int))
+                c = m.mapline.color
+                cv2.line(img,pt1,pt2,c,2)
+        cv2.imshow('left', img)
+
+        # img = np.array(self.right.image)
+        # for i, m in enumerate(good_matches):
+        #     pt1 = tuple(self.right.keylines[m[1]][:2].astype(int))
+        #     pt2 = tuple(self.right.keylines[m[1]][2:].astype(int))
+        #     c = tuple([int(x) for x in colors[i]])
+        #     cv2.line(img,pt1,pt2,c,2)
+        # cv2.imshow('right', img)        
+        cv2.waitKey(1)
+        
+    def match_maplines(self, maplines, source):
+        lines = []
+        descriptors = []
+        for mapline in maplines:
+            lines.append(mapline.endpoints)
+            descriptors.append(mapline.descriptor)
+
+        matches_left = dict(self.left.find_line_matches(lines, descriptors))
+        matches_right = dict(self.right.find_line_matches(lines, descriptors))
+
+        measurements = self.create_measurements_from_matches(matches_left, matches_right, maplines, FeatureType.Line)
+        return measurements
+
     def match_mappoints(self, mappoints, source):
 
         points = []
@@ -177,48 +315,7 @@ class StereoFrame:
         matches_left = dict(self.left.find_matches(points, descriptors))
         matches_right = dict(self.right.find_matches(points, descriptors))
 
-        measurements = []
-        for i, j in matches_left.items():
-            # if match in both left and right
-            if i in matches_right:
-                j2 = matches_right[i]
-
-                y1 = self.left.get_keypoint(j)[1]
-                y2 = self.right.get_keypoint(j2)[1]
-                if abs(y1 - y2) > 2.5:    # epipolar constraint
-                    continue   # TODO: choose one
-
-                meas = PointMeasurement(
-                    MeasurementType.STEREO,
-                    source,
-                    mappoints[i],
-                    [self.left.get_keypoint(j),
-                        self.right.get_keypoint(j2)],
-                    [self.left.get_descriptor(j),
-                        self.right.get_descriptor(j2)])
-                measurements.append(meas)
-
-            # if only left is matched
-            else:
-                meas = PointMeasurement(
-                    MeasurementType.LEFT,
-                    source,
-                    mappoints[i],
-                    [self.left.get_keypoint(j)],
-                    [self.left.get_descriptor(j)])
-                measurements.append(meas)
-
-        for i, j in matches_right.items():
-            # if only right is matched
-            if i not in matches_left:
-                meas = PointMeasurement(
-                    MeasurementType.RIGHT,
-                    source,
-                    mappoints[i],
-                    [self.right.get_keypoint(j)],
-                    [self.right.get_descriptor(j)])
-                measurements.append(meas)
-
+        measurements = self.create_measurements_from_matches(matches_left, matches_right, mappoints, FeatureType.Point)
         return measurements
     
     @property
@@ -309,6 +406,92 @@ class KeyFrame(StereoFrame):
 
         return mappoints, measurements
 
+    def create_maplines_from_triangulation(self):
+        matches = self._match_key_lines()
+        lines_3d, good = self._triangulate_lines(matches)
+
+        # First good triangulation filter
+        matches = matches[good]
+        lines_3d = lines_3d[good]
+
+        can_view = (self.left.can_view(lines_3d[:,:3]) *
+            self.left.can_view(lines_3d[:,3:]) *
+            self.right.can_view(lines_3d[:,:3]) *
+            self.right.can_view(lines_3d[:,3:]))
+
+        print(f'can view ratio: {np.sum(can_view) / len(can_view)}')
+
+        # Then can view filter
+        lines_3d = lines_3d[can_view]
+        matches = matches[can_view]
+
+        maplines = []
+        for line, match in zip(lines_3d, matches):
+            mapline = MapLine(line, self.left.line_descriptors[match[0]])
+            maplines.append(mapline)
+
+        measurements = []
+        for mapline, match in zip(maplines, matches):
+            meas = LineMeasurement(
+                MeasurementType.STEREO,
+                MeasurementSource.TRIANGULATION,
+                mapline,
+                [self.left.keylines[match[0]], self.right.keylines[match[1]]],
+                [self.left.line_descriptors[match[0]], self.right.line_descriptors[match[1]]])
+            measurements.append(meas)
+
+        return maplines, measurements
+
+    def _match_key_points(self, matching_distance=40, max_row_distance=2.5, max_disparity=100):
+        matches = self.params.descriptor_matcher.match(self.left.descriptors, self.right.descriptors)
+        assert len(matches) > 0
+
+        good_count = 0
+        good_matches = []
+        for m in matches:
+            pt1 = self.left.keypoints[m.queryIdx]
+            pt2 = self.right.keypoints[m.trainIdx]
+            if (m.distance < matching_distance and 
+                abs(pt1[1] - pt2[1]) < max_row_distance and 
+                abs(pt1[0] - pt2[0]) < max_disparity):  # epipolar constraint
+                    good_count += 1
+
+                    if self.left.unmatched_points[m.queryIdx] or self.right.unmatched_points[m.trainIdx]:  
+                        good_matches.append([m.queryIdx, m.trainIdx])
+
+        print(f'New keyframe has {good_count} good points, of which {len(good_matches)} are unmatched')
+
+        return np.array(good_matches)
+
+    def _match_key_lines(self, matching_distance=20, min_length=20, length_ratio=0.9, min_y_disparity=1):
+
+        matches = self.params.descriptor_matcher.match(self.left.line_descriptors, self.right.line_descriptors)
+        assert len(matches) > 0
+
+        def length(kl):
+            return math.sqrt((kl[0] - kl[2]) ** 2 + (kl[1] - kl[3]) ** 2)
+
+        good_count = 0
+        good_matches = []
+        for m in matches:
+            kl1 = self.left.keylines[m.queryIdx]
+            kl2 = self.right.keylines[m.trainIdx]
+            l1 = length(kl1)
+            l2 = length(kl2)
+            if (m.distance < matching_distance and
+                abs(kl1[1] - kl1[3]) > min_y_disparity and
+                abs(kl2[1] - kl2[3]) > min_y_disparity and
+                min(l1, l2) > min_length and
+                min(l1, l2) / max(l1, l2) > length_ratio):
+                good_count += 1
+
+                if self.left.unmatched_lines[m.queryIdx] or self.right.unmatched_lines[m.trainIdx]:  
+                    good_matches.append([m.queryIdx, m.trainIdx])
+
+        print(f'New keyframe has {good_count} good lines, of which {len(good_matches)} are unmatched')
+
+        return np.array(good_matches)  
+
     def _triangulate(self, matches):
         pts_left = np.array([self.left.keypoints[m] for m in matches[:,0]])
         pts_right = np.array([self.right.keypoints[m] for m in matches[:,1]])
@@ -321,30 +504,30 @@ class KeyFrame(StereoFrame):
         ).transpose()  # shape: (N, 4)
         points = points[:, :3] / points[:, 3:]
 
-        return points
+        return points  
 
-    def _match_key_points(self, matching_distance=40, max_row_distance=2.5, max_disparity=100):
-        matches = self.params.descriptor_matcher.match(self.left.descriptors, self.right.descriptors)
-        assert len(matches) > 0
+    def _triangulate_lines(self, matches):
+        kls_left = np.array([self.left.keylines[m] for m in matches[:,0]])
+        kls_right = np.array([self.right.keylines[m] for m in matches[:,1]])
 
-        good_matches = []
-        for m in matches:
-            pt1 = self.left.keypoints[m.queryIdx]
-            pt2 = self.right.keypoints[m.trainIdx]
-            if (m.distance < matching_distance and 
-                abs(pt1[1] - pt2[1]) < max_row_distance and 
-                abs(pt1[0] - pt2[0]) < max_disparity):   # epipolar constraint
-                good_matches.append([m.queryIdx, m.trainIdx])
-        return np.array(good_matches)
+        lines, good = triangulate_lines(kls_left, kls_right,
+            self.left.transform_matrix,
+            self.right.transform_matrix,
+            self.cam)
+
+        return lines, good
 
     def add_measurement(self, m):
-        self.meas[m] = m.mappoint
+        self.meas[m] = m.get_map_primitive()
 
     def measurements(self):
         return self.meas.keys()
 
     def mappoints(self):
-        return self.meas.values()
+        return [v for v in self.meas.values() if v.is_point()]
+
+    def maplines(self):
+        return [v for v in self.meas.values() if v.is_line()]
 
     def update_preceding(self, preceding):
         self.preceding_keyframe = preceding

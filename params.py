@@ -124,3 +124,7 @@ class ParamsKITTI(Params):
         self.view_viewpoint_y = -500   # -10
         self.view_viewpoint_z = -100   # -0.1
         self.view_viewpoint_f = 2000
+
+        self.line_detector = cv2.line_descriptor.BinaryDescriptor_createBinaryDescriptor()
+        self.line_extractor = self.line_detector
+        self.line_matching_distance = 30

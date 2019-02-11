@@ -1,5 +1,6 @@
 import numpy as np
 from collections import defaultdict
+from random import randrange
 
 class MapLandmarkBase:
     _id = 0
@@ -38,6 +39,12 @@ class MapLandmarkBase:
     def increase_measurement_count(self):
         self.count['meas'] += 1
 
+    def is_point(self):
+        return type(self) == MapPoint
+    
+    def is_line(self):
+        return type(self) == MapLine
+
 
 class MapPoint(MapLandmarkBase):
 
@@ -69,6 +76,8 @@ class MapLine(MapLandmarkBase):
 
         self.endpoints = endpoints
         self.descriptor = descriptor
+
+        self.color = (randrange(255), randrange(255), randrange(255))
 
     def update_endpoints(self, endpoints):
         self.endpoints = endpoints

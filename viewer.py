@@ -39,7 +39,7 @@ class DynamicArray(object):
         else:
             for i, x in enumerate(xs):
                 self.data[self.ind+i] = x
-            self.ind += len(xs)
+        self.ind += len(xs)
 
     def array(self):
         return self.data[:self.ind]
@@ -68,6 +68,7 @@ class MapViewer(object):
         # data queue
         self.q_pose = Queue()
         self.q_active = Queue()
+        self.q_active_lines = Queue()
         self.q_points = Queue()
         self.q_colors = Queue()
         self.q_graph = Queue()
@@ -77,6 +78,8 @@ class MapViewer(object):
         # message queue
         self.q_refresh = Queue()
         # self.q_quit = Queue()
+
+        self.existing_primitives = set()
 
         self.view_thread = Process(target=self.view)
         self.view_thread.start()
@@ -89,10 +92,17 @@ class MapViewer(object):
         self.q_pose.put(self.system.current.pose.matrix())
 
         points = []
+        lines = []
         for m in self.system.preceding.measurements():
-            if m.from_triangulation():
+            primitive = m.get_map_primitive()
+            if m.is_point() and m.from_triangulation():
                 points.append(m.mappoint.position) 
+            if primitive.id not in self.existing_primitives and m.is_line() and m.from_tracking():
+                lines.append(m.mapline.endpoints)
+                self.existing_primitives.add(primitive.id)
+
         self.q_active.put(points)
+        self.q_active_lines.put(lines)
 
         lines = []
         for kf in self.system.map.keyframes():
@@ -129,8 +139,9 @@ class MapViewer(object):
                     self.saved_keyframes.add(kf.id)
                     for m in kf.measurements():
                         if m.from_triangulation():
-                            points.append(m.mappoint.position)
-                            colors.append(m.mappoint.color)
+                            if m.is_point():
+                                points.append(m.mappoint.position)
+                                colors.append(m.mappoint.color)
             if len(cameras) > 0:
                 self.q_camera.put(cameras)
             if len(points) > 0:
@@ -163,6 +174,7 @@ class MapViewer(object):
         # checkbox
         m_follow_camera = pangolin.VarBool('menu.Follow Camera', value=True, toggle=True)
         m_show_points = pangolin.VarBool('menu.Show Points', True, True)
+        m_show_lines = pangolin.VarBool('menu.Show Lines', True, True)
         m_show_keyframes = pangolin.VarBool('menu.Show KeyFrames', True, True)
         m_show_graph = pangolin.VarBool('menu.Show Graph', True, True)
         m_show_image = pangolin.VarBool('menu.Show Image', True, True)
@@ -221,6 +233,7 @@ class MapViewer(object):
         graph = []
         loops = []
         mappoints = DynamicArray(shape=(3,))
+        maplines = DynamicArray(shape=(6,))
         colors = DynamicArray(shape=(3,))
         cameras = DynamicArray(shape=(4, 4))
 
@@ -297,6 +310,18 @@ class MapViewer(object):
                 gl.glEnd()
 
 
+            if not self.q_active_lines.empty():
+                active_lines = self.q_active_lines.get()
+                active_lines = np.array(active_lines)
+                maplines.extend(active_lines)
+
+            if m_show_lines.Get():
+                
+                gl.glLineWidth(1)
+                gl.glColor3f(1.0, 0.0, 0.5)
+                pangolin.DrawLines(maplines.array(), 2)
+
+
             if len(replays) > 0:
                 n = 300
                 gl.glPointSize(4)
@@ -349,7 +374,5 @@ class MapViewer(object):
 
             if pangolin.Pushed(m_refresh):
                 self.q_refresh.put(True)
-            
-
 
             pangolin.FinishFrame()

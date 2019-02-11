@@ -2,6 +2,7 @@ class Map(object):
     def __init__(self, ):
         self.kfs = []
         self.pts = set()
+        self.lns = set()
         
         self.kfs_set = set()
         self.meas_lookup = dict()
@@ -19,7 +20,10 @@ class Map(object):
     def add_mappoint(self, pt):
         self.pts.add(pt)
 
-    def add_measurement(self, kf, pt, meas):
+    def add_mapline(self, ln):
+        self.lns.add(ln)
+
+    def add_point_measurement(self, kf, pt, meas):
         if kf not in self.kfs_set or pt not in self.pts:
             return
 
@@ -27,5 +31,15 @@ class Map(object):
         meas.mappoint = pt
         kf.add_measurement(meas)
         pt.add_measurement(meas)
+
+        self.meas_lookup[meas.id] = meas
+
+    def add_line_measurement(self, kf, ln, meas):
+        if kf not in self.kfs_set or ln not in self.lns:
+            return
+        meas.keyframe = kf
+        meas.mapline = ln
+        kf.add_measurement(meas)
+        ln.add_measurement(meas)
 
         self.meas_lookup[meas.id] = meas
