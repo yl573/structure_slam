@@ -29,8 +29,6 @@ class Map(object):
 
         meas.keyframe = kf
         meas.mappoint = pt
-        kf.add_measurement(meas)
-        pt.add_measurement(meas)
 
         self.meas_lookup[meas.id] = meas
 
@@ -39,7 +37,5 @@ class Map(object):
             return
         meas.keyframe = kf
         meas.mapline = ln
-        kf.add_measurement(meas)
-        ln.add_measurement(meas)
 
         self.meas_lookup[meas.id] = meas

@@ -18,6 +18,9 @@ class MapLandmarkBase:
     def add_measurement(self, m):
         self.meas.append(m)
 
+    def is_tracked(self):
+        return self.count['meas'] > 1
+
     def is_bad(self):
         status = (
             self.count['meas'] == 0

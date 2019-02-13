@@ -175,8 +175,6 @@ class Frame(object):
 
             good_matches.append([m.queryIdx, m.trainIdx])
         
-        print(f'found {len(good_matches)} line matches')
-
         return np.array(good_matches)
 
     def get_feature(self, feature_type, i):
@@ -279,7 +277,9 @@ class StereoFrame:
                 pt1 = tuple(left_keyline[:2].astype(int))
                 pt2 = tuple(left_keyline[2:].astype(int))
                 c = m.mapline.color
-                cv2.line(img,pt1,pt2,c,2)
+                # c = (255, 0, 0)
+                cv2.line(img,pt1,pt2,c,10)
+        img = cv2.resize(img, (0,0), fx=0.5, fy=0.5) 
         cv2.imshow('left', img)
 
         # img = np.array(self.right.image)
@@ -291,7 +291,7 @@ class StereoFrame:
         # cv2.imshow('right', img)        
         cv2.waitKey(1)
         
-    def match_maplines(self, maplines, source):
+    def match_maplines(self, maplines):
         lines = []
         descriptors = []
         for mapline in maplines:
@@ -304,8 +304,7 @@ class StereoFrame:
         measurements = self.create_measurements_from_matches(matches_left, matches_right, maplines, FeatureType.Line)
         return measurements
 
-    def match_mappoints(self, mappoints, source):
-
+    def match_mappoints(self, mappoints):
         points = []
         descriptors = []
         for mappoint in mappoints:
@@ -368,6 +367,8 @@ class KeyFrame(StereoFrame):
 
         self.id = KeyFrame._id
         KeyFrame._id += 1
+
+        self.lock = Lock()
 
         self.preceding_keyframe = None
         self.loop_keyframe = None
@@ -459,11 +460,11 @@ class KeyFrame(StereoFrame):
                     if self.left.unmatched_points[m.queryIdx] or self.right.unmatched_points[m.trainIdx]:  
                         good_matches.append([m.queryIdx, m.trainIdx])
 
-        print(f'New keyframe has {good_count} good points, of which {len(good_matches)} are unmatched')
+        # print(f'New keyframe has {good_count} good points, of which {len(good_matches)} are unmatched')
 
         return np.array(good_matches)
 
-    def _match_key_lines(self, matching_distance=20, min_length=20, length_ratio=0.9, min_y_disparity=1):
+    def _match_key_lines(self, matching_distance=30, min_length=10, length_ratio=0.9, min_y_disparity=10):
 
         matches = self.params.descriptor_matcher.match(self.left.line_descriptors, self.right.line_descriptors)
         assert len(matches) > 0
@@ -488,7 +489,7 @@ class KeyFrame(StereoFrame):
                 if self.left.unmatched_lines[m.queryIdx] or self.right.unmatched_lines[m.trainIdx]:  
                     good_matches.append([m.queryIdx, m.trainIdx])
 
-        print(f'New keyframe has {good_count} good lines, of which {len(good_matches)} are unmatched')
+        # print(f'New keyframe has {good_count} good lines, of which {len(good_matches)} are unmatched')
 
         return np.array(good_matches)  
 
@@ -523,6 +524,9 @@ class KeyFrame(StereoFrame):
     def measurements(self):
         return self.meas.keys()
 
+    def point_measurements(self):
+        return [m for m in self.meas.keys() if m.is_point()]
+
     def mappoints(self):
         return [v for v in self.meas.values() if v.is_point()]
 
@@ -530,7 +534,31 @@ class KeyFrame(StereoFrame):
         return [v for v in self.meas.values() if v.is_line()]
 
     def update_preceding(self, preceding):
-        self.preceding_keyframe = preceding
+        with self.lock:
+            self.preceding_keyframe = preceding
+
+    def update_pose(self, pose):
+        with self.lock:
+            super().update_pose(pose)
+
+    def get_preceding(self):
+        with self.lock:
+            return self.preceding_keyframe
+
+    @property
+    def position(self):
+        with self.lock:
+            return self.left.pose.position()
+
+    @property
+    def orientation(self):
+        with self.lock:
+            return self.left.pose.orientation()
+
+    @property
+    def pose(self):
+        with self.lock:
+            return self.left.pose
 
     def is_fixed(self):
         return self.fixed

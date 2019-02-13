@@ -23,11 +23,14 @@ class MeasurementBase:
         self.source = source
         self.map_primitive = map_primitive
 
-        self.keyframe = None
+        self.keyframe_id = None
 
     @property
     def id(self):
-        return (self.keyframe.id, self.map_primitive.id)
+        return (self.keyframe_id, self.map_primitive.id)
+
+    def data(self):
+        return NotImplementedError()
 
     def __hash__(self):
         return hash(self.id)
@@ -75,6 +78,11 @@ class PointMeasurement(MeasurementBase):
             self.xyx = np.array([
                 *keypoints[0], keypoints[1][0]])
 
+    def data(self):
+        if self.is_stereo():
+            return self.xyx
+        return self.xy
+
     @property
     def mappoint(self):
         return self.map_primitive
@@ -102,7 +110,13 @@ class LineMeasurement(MeasurementBase):
     def mapline(self):
         return self.map_primitive
 
+    def data(self):
+        return self.keylines
+
     @mapline.setter
     def mapline(self, value):
         assert type(value) is MapLine
         self.map_primitive = value
+
+    def get_descriptor(self, i=0):
+        return self.descriptors[i]

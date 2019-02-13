@@ -81,7 +81,7 @@ def invert_transform(transform):
     new[:3,3:] = -R_inv.dot(transform[:3,3:])
     return new
 
-def triangulate_lines(lines1, lines2, inv_transform1, inv_transform2, cam, max_end_diff=10):
+def triangulate_lines(lines1, lines2, inv_transform1, inv_transform2, cam, max_end_diff=1000):
 
     # for some reason stereo-ptam uses the inverse transformation matrix, need to reserse it
     transform1 = invert_transform(inv_transform1)

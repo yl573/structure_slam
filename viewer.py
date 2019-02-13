@@ -70,6 +70,7 @@ class MapViewer(object):
         self.q_active = Queue()
         self.q_active_lines = Queue()
         self.q_points = Queue()
+        self.q_lines = Queue()
         self.q_colors = Queue()
         self.q_graph = Queue()
         self.q_camera = Queue()
@@ -78,8 +79,6 @@ class MapViewer(object):
         # message queue
         self.q_refresh = Queue()
         # self.q_quit = Queue()
-
-        self.existing_primitives = set()
 
         self.view_thread = Process(target=self.view)
         self.view_thread.start()
@@ -93,21 +92,26 @@ class MapViewer(object):
 
         points = []
         lines = []
+        line_colors = []
         for m in self.system.preceding.measurements():
+
             primitive = m.get_map_primitive()
+
             if m.is_point() and m.from_triangulation():
                 points.append(m.mappoint.position) 
-            if primitive.id not in self.existing_primitives and m.is_line() and m.from_tracking():
+
+            if m.is_line() and m.from_triangulation():
                 lines.append(m.mapline.endpoints)
-                self.existing_primitives.add(primitive.id)
+                line_colors.append(m.mapline.color)
 
         self.q_active.put(points)
-        self.q_active_lines.put(lines)
+        if len(lines) > 0:
+            self.q_active_lines.put((lines, line_colors))
 
         lines = []
         for kf in self.system.map.keyframes():
-            if kf.preceding_keyframe:
-                lines.append(([*kf.position, *kf.preceding_keyframe.position], 1))
+            if kf.get_preceding():
+                lines.append(([*kf.position, *kf.get_preceding().position], 1))
             if kf.loop_keyframe is not None:
                 lines.append(([*kf.position, *kf.loop_keyframe.position], 2))
         self.q_graph.put(lines)
@@ -132,6 +136,7 @@ class MapViewer(object):
         else:
             cameras = []
             points = []
+            lines = []
             colors = []
             for kf in self.system.map.keyframes()[-20:]:
                 if kf.id not in self.saved_keyframes:
@@ -142,11 +147,15 @@ class MapViewer(object):
                             if m.is_point():
                                 points.append(m.mappoint.position)
                                 colors.append(m.mappoint.color)
+                            if m.is_line():
+                                lines.append(m.mapline.endpoints)
             if len(cameras) > 0:
                 self.q_camera.put(cameras)
             if len(points) > 0:
                 self.q_points.put((points, 1))
                 self.q_colors.put((colors, 1))
+            if len(lines) > 0:
+                self.q_lines.put((lines, 1))
 
 
     def stop(self):
@@ -237,6 +246,8 @@ class MapViewer(object):
         colors = DynamicArray(shape=(3,))
         cameras = DynamicArray(shape=(4, 4))
 
+        active_lines = [] 
+        line_colors = []   
 
         while not pangolin.ShouldQuit():
 
@@ -309,17 +320,26 @@ class MapViewer(object):
                     gl.glVertex3f(*point)
                 gl.glEnd()
 
-
-            if not self.q_active_lines.empty():
-                active_lines = self.q_active_lines.get()
-                active_lines = np.array(active_lines)
-                maplines.extend(active_lines)
+            if not self.q_lines.empty():
+                lines, code = self.q_lines.get()
+                maplines.extend(lines)       
 
             if m_show_lines.Get():
                 
                 gl.glLineWidth(1)
                 gl.glColor3f(1.0, 0.0, 0.5)
                 pangolin.DrawLines(maplines.array(), 2)
+
+                if not self.q_active_lines.empty():
+                    active_lines, line_colors = np.array(self.q_active_lines.get())
+
+                if active_lines is not None:
+                    for act_line, color in zip(active_lines, line_colors):
+                        c = (color[2] / 255, color[1] / 255, color[0] / 255)
+                        act_line = act_line.reshape((1,6))
+                        gl.glLineWidth(5)
+                        gl.glColor3f(*c)
+                        pangolin.DrawLines(act_line, 2)
 
 
             if len(replays) > 0:
@@ -376,3 +396,6 @@ class MapViewer(object):
                 self.q_refresh.put(True)
 
             pangolin.FinishFrame()
+
+            import time
+            time.sleep(0.1)

@@ -1,45 +1,19 @@
-import g2o
-import numpy as np
 
-class Pose:
+import multiprocessing
+import time
+import cv2
+import pickle
 
-    def __init__(self, *args):
-        self.iso = Pose(*args)
+class Test:
+    def __init__(self):
+        self.data = cv2.line_descriptor.BinaryDescriptor_createBinaryDescriptor()
 
-    def __getstate__(self):
-        state = {}
-        state['matrix'] = self.iso.matrix()
-        return state
+t = Test()
+print(t.data)
 
-    def __setstate__(self, state):
-        self.iso = Pose(state['matrix'])
+def func(test):
+    print(test.data)
 
-    def position(self):
-        return self.iso.position()
-
-    def orientation(self):
-        return self.iso.orientation()
-
-    def matrix(self):
-        return self.iso.matrix()
-
-    def inverse(self):
-        return self.iso.inverse()
-
-
-import dill
-
-q = Pose)
-print(q.position())
-print(q.orientation())
-
-with open('test.pkl', 'wb') as f:
-    dill.dump(q, f)
-
-with open('test.pkl', 'rb') as f:
-    l = dill.load(f)
-    print(l.matrix())
-
-
-
-
+p = multiprocessing.Process(target=func, args=(t,))
+p.start()
+p.join()

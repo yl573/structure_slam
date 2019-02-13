@@ -4,7 +4,7 @@ import time
 from itertools import chain
 from collections import defaultdict
 
-from mapping import Map
+from mapping import Map #, MappingThread
 from optimization import BundleAdjustment
 from measurements import MeasurementSource
 from motion import MotionModel
@@ -19,6 +19,8 @@ class Tracker(object):
 
         self.motion_model = MotionModel()
         self.map = Map()
+        # self.mapping_thread = MappingThread(self.map)
+        # self.mapping_thread.start()
         
         self.preceding = None        # last keyframe
         self.current = None          # current frame
@@ -41,6 +43,8 @@ class Tracker(object):
         for mappoint, measurement in zip(mappoints, measurements):
             self.map.add_mappoint(mappoint)
             self.map.add_point_measurement(keyframe, mappoint, measurement)
+            keyframe.add_measurement(measurement)
+            mappoint.add_measurement(measurement)
             mappoint.increase_measurement_count()
 
         maplines, line_measurements = keyframe.create_maplines_from_triangulation()
@@ -48,6 +52,8 @@ class Tracker(object):
         for mapline, measurement in zip(maplines, line_measurements):
             self.map.add_mapline(mapline)
             self.map.add_line_measurement(keyframe, mapline, measurement)
+            keyframe.add_measurement(measurement)
+            mapline.add_measurement(measurement)
             mapline.increase_measurement_count()
 
         self.preceding = keyframe
@@ -89,23 +95,24 @@ class Tracker(object):
         frame.update_pose(predicted_pose)
 
         local_mappoints = self.get_local_map_points(frame)
-        measurements = frame.match_mappoints(local_mappoints, MeasurementSource.TRACKING)
+        measurements = frame.match_mappoints(local_mappoints)
 
         local_maplines = self.get_local_map_lines(frame)
-        line_measurements = frame.match_maplines(local_maplines, MeasurementSource.TRACKING)
-        frame.visualise_measurements(line_measurements)
+        line_measurements = frame.match_maplines(local_maplines)
 
         tracked_map = set()
         for m in measurements:
             mappoint = m.get_map_primitive()
             mappoint.update_descriptor(m.get_descriptor())
             mappoint.increase_measurement_count()
+            mappoint.add_measurement(m)
             tracked_map.add(mappoint)
 
-        # for m in line_measurements:
-        #     mapline = m.mapline
-        #     mapline.update_descriptor(m.get_descriptor())
-        #     mapline.
+        for m in line_measurements:
+            mapline = m.get_map_primitive()
+            mapline.update_descriptor(m.get_descriptor())
+            mapline.add_measurement(m)
+            mapline.increase_measurement_count()
         
         try:
             pose = self.refine_pose(frame.pose, self.cam, measurements)
@@ -129,13 +136,18 @@ class Tracker(object):
             for mappoint, measurement in zip(mappoints, measurements):
                 self.map.add_mappoint(mappoint)
                 self.map.add_point_measurement(keyframe, mappoint, measurement)
+                keyframe.add_measurement(measurement)
+                mappoint.add_measurement(measurement)
                 mappoint.increase_measurement_count()
 
             maplines, line_measurements = keyframe.create_maplines_from_triangulation()
+            # frame.visualise_measurements(line_measurements)
             print(f'New Keyframe with {len(maplines)} lines')
             for mapline, measurement in zip(maplines, line_measurements):
                 self.map.add_mapline(mapline)
                 self.map.add_line_measurement(keyframe, mapline, measurement)
+                keyframe.add_measurement(measurement)
+                mapline.add_measurement(measurement)
                 mapline.increase_measurement_count()
             
             self.preceding = keyframe
@@ -143,7 +155,6 @@ class Tracker(object):
     def get_local_map_points(self, frame):
         checked = set()
         filtered = []
-
         # Add in map points from preceding and reference
         for pt in self.preceding.mappoints():  # neglect can_view test
             if pt in checked or pt.is_bad():
@@ -163,8 +174,6 @@ class Tracker(object):
                 continue
             ln.increase_projection_count()
             filtered.append(ln)
-
-        print(f'Found {len(filtered)} local maplines')
 
         return filtered
 

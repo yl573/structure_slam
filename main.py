@@ -32,12 +32,14 @@ def main(args):
     
     durations = []
     for i in range(len(dataset)):
-        j = i + 10
+        j = i + 0
         tracker.update(i, dataset.left[j], dataset.right[j], timestamp=dataset.timestamps[j])
         viewer.update()
+        print(f'Frame {j}')
 
+        # input("Press any key to continue...")
         # import time
-        # time.sleep(20)
+        # time.sleep(2)
     
     viewer.stop()
 
