@@ -1,4 +1,7 @@
-# stereo_ptam
+
+# Modified from https://github.com/uoip/stereo_ptam
+
+<!-- # stereo_ptam
 
 This python project is a complete implementation of Stereo PTAM, based on C++ project [lrse/sptam](https://github.com/lrse/sptam) and paper "[S-PTAM: Stereo Parallel Tracking and Mapping](http://webdiis.unizar.es/~jcivera/papers/pire_etal_ras17.pdf) Taihu Pire et al. RAS17", with some modifications.   
 
@@ -58,4 +61,4 @@ Robotics and Autonomous Systems, 2017.
 Proc. of The International Conference on Intelligent Robots and Systems (IROS), Hamburg, Germany, 2015.  
 
 
-If you have interest in the python implementation here, just email me (Hang Qi, qihang@outlook.com);
+If you have interest in the python implementation here, just email me (Hang Qi, qihang@outlook.com); -->
