@@ -396,6 +396,3 @@ class MapViewer(object):
                 self.q_refresh.put(True)
 
             pangolin.FinishFrame()
-
-            import time
-            time.sleep(0.1)

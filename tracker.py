@@ -4,12 +4,13 @@ import time
 from itertools import chain
 from collections import defaultdict
 
-from mapping import Map #, MappingThread
-from optimization import BundleAdjustment
+from mapping import Map
+from optimization import BundleAdjustment, LocalBA
 from measurements import MeasurementSource
 from motion import MotionModel
 from frame import StereoFrame, Frame
 import g2o
+from utils import RunningAverageTimer
 
 
 class Tracker(object):
@@ -19,16 +20,17 @@ class Tracker(object):
 
         self.motion_model = MotionModel()
         self.map = Map()
-        # self.mapping_thread = MappingThread(self.map)
-        # self.mapping_thread.start()
         
         self.preceding = None        # last keyframe
         self.current = None          # current frame
         self.status = defaultdict(bool)
 
         self.optimizer = BundleAdjustment()
+        self.bundle_adjustment = LocalBA()
+
         self.min_measurements = params.pnp_min_measurements
         self.max_iterations = params.pnp_max_iterations
+        self.timer = RunningAverageTimer()
 
     def initialize(self, frame):
         keyframe = frame.to_keyframe()
@@ -47,14 +49,14 @@ class Tracker(object):
             mappoint.add_measurement(measurement)
             mappoint.increase_measurement_count()
 
-        maplines, line_measurements = keyframe.create_maplines_from_triangulation()
-        print(f'Initialized {len(maplines)} lines')
-        for mapline, measurement in zip(maplines, line_measurements):
-            self.map.add_mapline(mapline)
-            self.map.add_line_measurement(keyframe, mapline, measurement)
-            keyframe.add_measurement(measurement)
-            mapline.add_measurement(measurement)
-            mapline.increase_measurement_count()
+        # maplines, line_measurements = keyframe.create_maplines_from_triangulation()
+        # print(f'Initialized {len(maplines)} lines')
+        # for mapline, measurement in zip(maplines, line_measurements):
+        #     self.map.add_mapline(mapline)
+        #     self.map.add_line_measurement(keyframe, mapline, measurement)
+        #     keyframe.add_measurement(measurement)
+        #     mapline.add_measurement(measurement)
+        #     mapline.increase_measurement_count()
 
         self.preceding = keyframe
         self.current = keyframe
@@ -63,11 +65,17 @@ class Tracker(object):
         self.motion_model.update_pose(
             frame.timestamp, frame.position, frame.orientation)
 
+    # def clear_optimizer(self):
+    #     # Calling optimizer.clear() doesn't fully clear for some reason
+    #     # This prevents running time from scaling linearly with the number of frames
+    #     self.optimizer = BundleAdjustment()
+    #     self.bundle_adjustment = LocalBA()
+
     def refine_pose(self, pose, cam, measurements):
         assert len(measurements) >= self.min_measurements, (
             'Not enough points')
             
-        self.optimizer.clear()
+        self.optimizer = BundleAdjustment()
         self.optimizer.add_pose(0, pose, cam, fixed=False)
 
         for i, m in enumerate(measurements):
@@ -75,11 +83,13 @@ class Tracker(object):
             self.optimizer.add_edge(0, i, 0, m)
 
         self.optimizer.optimize(self.max_iterations)
+
         return self.optimizer.get_pose(0)
 
     
     def update(self, i, left_img, right_img, timestamp):
 
+        # Feature extraction takes 0.12s
         origin = g2o.Isometry3d()
         left_frame = Frame(i, origin, self.cam, self.params, left_img, timestamp)
         right_frame = Frame(i, self.cam.compute_right_camera_pose(origin), self.cam, self.params, right_img, timestamp)
@@ -89,31 +99,24 @@ class Tracker(object):
             self.initialize(frame)
             return
 
+        # All code in this functions below takes 0.05s
+
         self.current = frame
 
         predicted_pose, _ = self.motion_model.predict_pose(frame.timestamp)
         frame.update_pose(predicted_pose)
 
+        # Get mappoints and measurements take 0.013s
         local_mappoints = self.get_local_map_points(frame)
+
+        assert len(local_mappoints) > 0, 'local_mappoints cannot be empty'
+
         measurements = frame.match_mappoints(local_mappoints)
 
-        local_maplines = self.get_local_map_lines(frame)
-        line_measurements = frame.match_maplines(local_maplines)
-
-        tracked_map = set()
-        for m in measurements:
-            mappoint = m.get_map_primitive()
-            mappoint.update_descriptor(m.get_descriptor())
-            mappoint.increase_measurement_count()
-            mappoint.add_measurement(m)
-            tracked_map.add(mappoint)
-
-        for m in line_measurements:
-            mapline = m.get_map_primitive()
-            mapline.update_descriptor(m.get_descriptor())
-            mapline.add_measurement(m)
-            mapline.increase_measurement_count()
+        # local_maplines = self.get_local_map_lines(frame)
+        # line_measurements = frame.match_maplines(local_maplines)
         
+        # Refined pose takes 0.02s
         try:
             pose = self.refine_pose(frame.pose, self.cam, measurements)
             frame.update_pose(pose)
@@ -123,8 +126,37 @@ class Tracker(object):
             tracking_is_ok = False
             print('tracking failed!!!')
 
+
         if tracking_is_ok and self.should_be_keyframe(frame, measurements):
+            # Keyframe creation takes 0.03s
             self.create_new_keyframe(frame)
+
+        # self.optimize_map()
+
+
+
+    def optimize_map(self):
+        """
+        Python doesn't really work with the multithreading model, so just putting optimization on the main thread
+        """
+        
+        adjust_keyframes = self.map.search_adjust_keyframes()
+
+        # Set data time increases with iterations!
+        # self.timer = RunningAverageTimer()
+        self.bundle_adjustment = LocalBA()
+        self.bundle_adjustment.optimizer.set_verbose(True)
+
+        # with self.timer:
+        self.bundle_adjustment.set_data(adjust_keyframes, [])
+        
+        self.bundle_adjustment.optimize(2)
+
+        self.bundle_adjustment.update_poses()
+
+        self.bundle_adjustment.update_points()
+        
+
 
     def create_new_keyframe(self, frame):
             keyframe = frame.to_keyframe()
@@ -140,15 +172,15 @@ class Tracker(object):
                 mappoint.add_measurement(measurement)
                 mappoint.increase_measurement_count()
 
-            maplines, line_measurements = keyframe.create_maplines_from_triangulation()
-            # frame.visualise_measurements(line_measurements)
-            print(f'New Keyframe with {len(maplines)} lines')
-            for mapline, measurement in zip(maplines, line_measurements):
-                self.map.add_mapline(mapline)
-                self.map.add_line_measurement(keyframe, mapline, measurement)
-                keyframe.add_measurement(measurement)
-                mapline.add_measurement(measurement)
-                mapline.increase_measurement_count()
+            # maplines, line_measurements = keyframe.create_maplines_from_triangulation()
+            # # frame.visualise_measurements(line_measurements)
+            # print(f'New Keyframe with {len(maplines)} lines')
+            # for mapline, measurement in zip(maplines, line_measurements):
+            #     self.map.add_mapline(mapline)
+            #     self.map.add_line_measurement(keyframe, mapline, measurement)
+            #     keyframe.add_measurement(measurement)
+            #     mapline.add_measurement(measurement)
+            #     mapline.increase_measurement_count()
             
             self.preceding = keyframe
 

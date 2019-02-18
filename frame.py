@@ -534,31 +534,10 @@ class KeyFrame(StereoFrame):
         return [v for v in self.meas.values() if v.is_line()]
 
     def update_preceding(self, preceding):
-        with self.lock:
-            self.preceding_keyframe = preceding
-
-    def update_pose(self, pose):
-        with self.lock:
-            super().update_pose(pose)
+        self.preceding_keyframe = preceding
 
     def get_preceding(self):
-        with self.lock:
-            return self.preceding_keyframe
-
-    @property
-    def position(self):
-        with self.lock:
-            return self.left.pose.position()
-
-    @property
-    def orientation(self):
-        with self.lock:
-            return self.left.pose.orientation()
-
-    @property
-    def pose(self):
-        with self.lock:
-            return self.left.pose
+        return self.preceding_keyframe
 
     def is_fixed(self):
         return self.fixed

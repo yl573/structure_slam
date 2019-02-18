@@ -23,6 +23,9 @@ class Map(object):
     def add_mapline(self, ln):
         self.lns.add(ln)
 
+    def search_adjust_keyframes(self):
+        return self.kfs[-3:]
+
     def add_point_measurement(self, kf, pt, meas):
         if kf not in self.kfs_set or pt not in self.pts:
             return

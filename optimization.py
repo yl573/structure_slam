@@ -1,10 +1,12 @@
 import numpy as np
 import g2o
 from measurements import MeasurementType
+from utils import RunningAverageTimer
+
 
 
 class BundleAdjustment(g2o.SparseOptimizer):
-    def __init__(self, ):
+    def __init__(self):
         super().__init__()
 
         # Higher confident (better than CHOLMOD, according to 
@@ -22,6 +24,9 @@ class BundleAdjustment(g2o.SparseOptimizer):
         self.delta = np.sqrt(5.991)   
         self.aborted = False
 
+        self.timer = RunningAverageTimer()
+        self.ids = []
+
     def optimize(self, max_iterations=10):
         super().initialize_optimization()
         super().optimize(max_iterations)
@@ -38,6 +43,7 @@ class BundleAdjustment(g2o.SparseOptimizer):
 
         v_se3 = g2o.VertexCam()
         v_se3.set_id(pose_id * 2)
+        self.ids.append(pose_id * 2)
         v_se3.set_estimate(sbacam)
         v_se3.set_fixed(fixed)
         super().add_vertex(v_se3) 
@@ -45,6 +51,7 @@ class BundleAdjustment(g2o.SparseOptimizer):
     def add_point(self, point_id, point, fixed=False, marginalized=True):
         v_p = g2o.VertexSBAPointXYZ()
         v_p.set_id(point_id * 2 + 1)
+        self.ids.append(point_id * 2 + 1)
         v_p.set_marginalized(marginalized)
         v_p.set_estimate(point)
         v_p.set_fixed(fixed)
@@ -106,11 +113,13 @@ class BundleAdjustment(g2o.SparseOptimizer):
         self.aborted = True
 
 class LocalBA(object):
-    def __init__(self, ):
+    def __init__(self):
         self.optimizer = BundleAdjustment()
         self.measurements = []
-        self.keyframes = []
-        self.mappoints = set()
+        self.keyframes = {}
+        self.mappoints = {}
+
+        self.timer = RunningAverageTimer()
 
         # threshold for confidence interval of 95%
         self.huber_threshold = 5.991
@@ -121,43 +130,59 @@ class LocalBA(object):
     def add_mappoint(self, point_id, position):
         self.optimizer.add_point(point_id, position)
 
-    def add_measurement(self, meas_id, point_id, keyframe_id, meas_type, measured_point):
-        self.optimizer.add_edge(meas_id, point_id, keyframe_id, m)
-
-    # def set_data(self, adjust_keyframes, fixed_keyframes, mappoints, observations):
+    # def add_measurement(self, meas_id, point_id, keyframe_id, meas_type, measured_point):
+    #     self.optimizer.add_edge(meas_id, point_id, keyframe_id, m)
 
     def set_data(self, adjust_keyframes, fixed_keyframes):
         self.clear()
+
         for kf in adjust_keyframes:
-            self.optimizer.add_pose(kf.id, kf.pose, kf.cam, fixed=False)
-            self.keyframes.append(kf)
+            kf_id = len(self.keyframes)
+            self.optimizer.add_pose(kf_id, kf.pose, kf.cam, fixed=False)
+            self.keyframes[kf] = kf_id
 
             for m in kf.point_measurements():
-
+                pt_id = len(self.mappoints)
                 pt = m.mappoint
                 if pt not in self.mappoints:
-                    self.optimizer.add_point(pt.id, pt.position)
-                    self.mappoints.add(pt)
+                    self.optimizer.add_point(pt_id, pt.position)
+                    self.mappoints[pt] = pt_id
 
                 edge_id = len(self.measurements)
-                self.optimizer.add_edge(edge_id, pt.id, kf.id, m)
+                self.optimizer.add_edge(edge_id, pt_id, kf_id, m)
                 self.measurements.append(m)
 
         for kf in fixed_keyframes:
-            self.optimizer.add_pose(kf.id, kf.pose, kf.cam, fixed=True)
+            kf_id = len(self.keyframes)
+            self.optimizer.add_pose(kf_id, kf.pose, kf.cam, fixed=True)
             for m in kf.point_measurements():
                 if m.mappoint in self.mappoints:
                     edge_id = len(self.measurements)
-                    self.optimizer.add_edge(edge_id, m.mappoint.id, kf.id, m)
+                    pt_id = self.mappoints[m.mappoint]
+                    self.optimizer.add_edge(edge_id, pt_id, kf_id, m)
                     self.measurements.append(m)
 
     def update_points(self):
-        for mappoint in self.mappoints:
-            mappoint.update_position(self.optimizer.get_point(mappoint.id))
+        diff = []
+        for mappoint, pt_id in self.mappoints.items():
+
+            pos = self.optimizer.get_point(pt_id)
+            # For some reason just using the points will cause an error in g2o
+            pos = pos + np.random.rand(3) * 1e-6
+            diff.append(np.mean(np.abs((pos - mappoint.position) / mappoint.position)))
+            mappoint.update_position(pos)
+        print('Mean point change ratio: ', np.mean(diff))
 
     def update_poses(self):
-        for keyframe in self.keyframes:
-            keyframe.update_pose(self.optimizer.get_pose(keyframe.id))
+        diff = []
+        for keyframe, kf_id in self.keyframes.items():
+            pos = self.optimizer.get_pose(kf_id)
+            p1 = pos.position()
+            p2 = keyframe.position
+            diff.append(np.mean(np.abs((p1 - p2) / p2)))
+            # print(pos - keyframe.pose)
+            keyframe.update_pose(pos)
+        print('Mean keyframe change ratio: ', np.mean(diff))
 
     def get_bad_measurements(self):
         bad_measurements = []

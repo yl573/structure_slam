@@ -15,6 +15,7 @@ from viewer import MapViewer
 import time
 
 from viewer import MapViewer
+from utils import RunningAverageTimer
 
 def main(args):
     dataset = KITTIOdometry(args.path)
@@ -29,12 +30,22 @@ def main(args):
     tracker = Tracker(params, cam)
     # viewer = MapViewer(shared_map)
     viewer = MapViewer(tracker, params)
+
+    timer = RunningAverageTimer()
     
     durations = []
     for i in range(len(dataset)):
         j = i + 0
-        tracker.update(i, dataset.left[j], dataset.right[j], timestamp=dataset.timestamps[j])
-        viewer.update()
+
+        # Data loading takes 0.036s
+        left = dataset.left[j]
+        right = dataset.right[j]
+        
+        tracker.update(i, left, right, timestamp=dataset.timestamps[j])
+        
+        # Viewer update takes 0.002s
+        viewer.update(refresh=True)
+
         print(f'Frame {j}')
 
         # input("Press any key to continue...")
@@ -44,5 +55,5 @@ def main(args):
     viewer.stop()
 
 if __name__ == '__main__':
-    args = AttrDict(path='/Volumes/MyPassport/KITTI/dataset/sequences/00/')
+    args = AttrDict(path='/Users/yuxuanliu/Desktop/00/')
     main(args)
