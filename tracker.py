@@ -32,6 +32,8 @@ class Tracker(object):
         self.max_iterations = params.pnp_max_iterations
         self.timer = RunningAverageTimer()
 
+        self.lines = False
+
     def initialize(self, frame):
         keyframe = frame.to_keyframe()
         mappoints, measurements = keyframe.create_mappoints_from_triangulation()
@@ -40,23 +42,17 @@ class Tracker(object):
             'Not enough points to initialize map.')
 
         keyframe.set_fixed(True)
-        self.map.add_keyframe(keyframe)
 
-        for mappoint, measurement in zip(mappoints, measurements):
-            self.map.add_mappoint(mappoint)
-            self.map.add_point_measurement(keyframe, mappoint, measurement)
-            keyframe.add_measurement(measurement)
-            mappoint.add_measurement(measurement)
-            mappoint.increase_measurement_count()
+        self.extend_graph(keyframe, mappoints, measurements)
 
-        # maplines, line_measurements = keyframe.create_maplines_from_triangulation()
-        # print(f'Initialized {len(maplines)} lines')
-        # for mapline, measurement in zip(maplines, line_measurements):
-        #     self.map.add_mapline(mapline)
-        #     self.map.add_line_measurement(keyframe, mapline, measurement)
-        #     keyframe.add_measurement(measurement)
-        #     mapline.add_measurement(measurement)
-        #     mapline.increase_measurement_count()
+        if self.lines:
+            maplines, line_measurements = keyframe.create_maplines_from_triangulation()
+            print(f'Initialized {len(maplines)} lines')
+            for mapline, measurement in zip(maplines, line_measurements):
+                self.map.add_mapline(mapline)
+                self.map.add_line_measurement(keyframe, mapline, measurement)
+                keyframe.add_measurement(measurement)
+                mapline.add_measurement(measurement)
 
         self.preceding = keyframe
         self.current = keyframe
@@ -155,32 +151,32 @@ class Tracker(object):
         self.bundle_adjustment.update_poses()
 
         self.bundle_adjustment.update_points()
-        
 
+    
+    def extend_graph(self, keyframe, mappoints, measurements):
+        self.map.add_keyframe(keyframe)
+        for mappoint, measurement in zip(mappoints, measurements):
+            self.map.add_mappoint(mappoint)
+            self.map.add_point_measurement(keyframe, mappoint, measurement)
+            keyframe.add_measurement(measurement)
+            mappoint.add_measurement(measurement)
 
     def create_new_keyframe(self, frame):
             keyframe = frame.to_keyframe()
             keyframe.update_preceding(self.preceding)
 
             mappoints, measurements = keyframe.create_mappoints_from_triangulation()
-            self.map.add_keyframe(keyframe)
+            self.extend_graph(keyframe, mappoints, measurements)
 
-            for mappoint, measurement in zip(mappoints, measurements):
-                self.map.add_mappoint(mappoint)
-                self.map.add_point_measurement(keyframe, mappoint, measurement)
-                keyframe.add_measurement(measurement)
-                mappoint.add_measurement(measurement)
-                mappoint.increase_measurement_count()
-
-            # maplines, line_measurements = keyframe.create_maplines_from_triangulation()
-            # # frame.visualise_measurements(line_measurements)
-            # print(f'New Keyframe with {len(maplines)} lines')
-            # for mapline, measurement in zip(maplines, line_measurements):
-            #     self.map.add_mapline(mapline)
-            #     self.map.add_line_measurement(keyframe, mapline, measurement)
-            #     keyframe.add_measurement(measurement)
-            #     mapline.add_measurement(measurement)
-            #     mapline.increase_measurement_count()
+            if self.lines:
+                maplines, line_measurements = keyframe.create_maplines_from_triangulation()
+                frame.visualise_measurements(line_measurements)
+                print(f'New Keyframe with {len(maplines)} lines')
+                for mapline, measurement in zip(maplines, line_measurements):
+                    self.map.add_mapline(mapline)
+                    self.map.add_line_measurement(keyframe, mapline, measurement)
+                    keyframe.add_measurement(measurement)
+                    mapline.add_measurement(measurement)
             
             self.preceding = keyframe
 

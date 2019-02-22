@@ -14,8 +14,8 @@ from tracker import Tracker
 from viewer import MapViewer
 import time
 
-from viewer import MapViewer
 from utils import RunningAverageTimer
+
 
 def main(args):
     dataset = KITTIOdometry(args.path)
@@ -26,34 +26,42 @@ def main(args):
         params.frustum_near, params.frustum_far, 
         dataset.cam.baseline)
 
-    # shared_map = Map()
     tracker = Tracker(params, cam)
-    # viewer = MapViewer(shared_map)
     viewer = MapViewer(tracker, params)
+
+    if args.view_map:
+        viewer.load_points()
+        return
 
     timer = RunningAverageTimer()
     
     durations = []
-    for i in range(len(dataset)):
-        j = i + 0
 
-        # Data loading takes 0.036s
-        left = dataset.left[j]
-        right = dataset.right[j]
-        
-        tracker.update(i, left, right, timestamp=dataset.timestamps[j])
-        
-        # Viewer update takes 0.002s
-        viewer.update(refresh=True)
+    try:
+        for i in range(len(dataset)):
+            j = i + 0
 
-        print(f'Frame {j}')
+            # Data loading takes 0.036s
+            left = dataset.left[j]
+            right = dataset.right[j]
+            
+            tracker.update(i, left, right, timestamp=dataset.timestamps[j])
+            
+            # Viewer update takes 0.002s
+            viewer.update(refresh=True)
 
-        # input("Press any key to continue...")
-        # import time
-        # time.sleep(2)
-    
-    viewer.stop()
+            print(f'Frame {j}')
+
+            # input("Press any key to continue...")
+            # import time
+            # time.sleep(2)
+    except:
+        pass
+    finally:
+        viewer.stop()
+        viewer.save_points()
 
 if __name__ == '__main__':
-    args = AttrDict(path='/Users/yuxuanliu/Desktop/00/')
+    args = AttrDict(path='/Users/yuxuanliu/Desktop/kitti/00/')
+    args.view_map = True
     main(args)

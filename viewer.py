@@ -4,10 +4,10 @@ import cv2
 import OpenGL.GL as gl
 import pangolin
 
+import dill
+
 import time
 from multiprocessing import Process, Queue
-
-
 
 class DynamicArray(object):
     def __init__(self, shape=3):
@@ -83,6 +83,31 @@ class MapViewer(object):
         self.view_thread = Process(target=self.view)
         self.view_thread.start()
 
+    def save_points(self):
+        points = []
+        colors = []
+        
+        print('Saving point cloud')
+        for pt in self.system.map.mappoints():
+            points.append(pt.position)
+            colors.append(pt.best_seg_color())
+        if len(points) > 0:
+            with open('map.pkl', 'wb') as f:
+                dill.dump({
+                    'points': points,
+                    'colors': colors
+                }, f)
+
+            self.load_points()
+
+    def load_points(self):
+        with open('map.pkl', 'rb') as f:
+            data = dill.load(f)
+        points = data['points']
+        colors = data['colors']
+        self.q_points.put((points, 0))
+        self.q_colors.put((colors, 0))
+
     def update(self, refresh=False):
         while not self.q_refresh.empty():
             refresh = self.q_refresh.get()
@@ -129,7 +154,7 @@ class MapViewer(object):
             colors = []
             for pt in self.system.map.mappoints():
                 points.append(pt.position)
-                colors.append(pt.color)
+                colors.append(pt.best_seg_color())
             if len(points) > 0:
                 self.q_points.put((points, 0))
                 self.q_colors.put((colors, 0))
@@ -306,14 +331,14 @@ class MapViewer(object):
                     colors.extend(cls)
 
             if m_show_points.Get():
-                gl.glPointSize(2)
+                gl.glPointSize(4)
                  # easily draw millions of points
                 pangolin.DrawPoints(mappoints.array(), colors.array())
 
                 if not self.q_active.empty():
                     active = self.q_active.get()
 
-                gl.glPointSize(3)
+                gl.glPointSize(5)
                 gl.glBegin(gl.GL_POINTS)
                 gl.glColor3f(1.0, 0.0, 0.0)
                 for point in active:

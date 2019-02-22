@@ -12,6 +12,10 @@ from primitives import MapPoint, MapLine
 from measurements import PointMeasurement, LineMeasurement, MeasurementType, MeasurementSource
 from line_algorithms import triangulate_lines
 import math
+from segmentation import SegmentationModel
+
+
+segmentation = SegmentationModel()
 
 
 class FeatureType(Enum):
@@ -363,6 +367,8 @@ class KeyFrame(StereoFrame):
     def __init__(self, stereo_frame):
         super().__init__(stereo_frame.left, stereo_frame.right)
 
+        self.classes, _ = segmentation.segment_image(stereo_frame.left.image)
+
         self.meas = dict()
 
         self.id = KeyFrame._id
@@ -396,12 +402,16 @@ class KeyFrame(StereoFrame):
 
         measurements = []
         for mappoint, match in zip(mappoints, matches):
+
+            seg_class = segmentation.find_seg_class(self.classes, self.left.keypoints[match[0]])
+
             meas = PointMeasurement(
                 MeasurementType.STEREO,
                 MeasurementSource.TRIANGULATION,
                 mappoint,
                 [self.left.keypoints[match[0]], self.right.keypoints[match[1]]],
-                [self.left.descriptors[match[0]], self.right.descriptors[match[1]]])
+                [self.left.descriptors[match[0]], self.right.descriptors[match[1]]],
+                seg_class)
             meas.view = self.transform(mappoint.position)
             measurements.append(meas)
 

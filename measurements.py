@@ -65,13 +65,14 @@ class MeasurementBase:
 
 class PointMeasurement(MeasurementBase):
 
-    def __init__(self, measurement_type, source, mappoint, keypoints, descriptors):
+    def __init__(self, measurement_type, source, mappoint, keypoints, descriptors, seg_class=None):
 
         super().__init__(measurement_type, source, mappoint)
 
         self.keypoints = keypoints
         self.descriptors = descriptors
         self.view = None    # mappoint's position in current coordinates frame
+        self.seg_class = seg_class
 
         self.xy = np.array(self.keypoints[0])
         if self.is_stereo():

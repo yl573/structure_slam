@@ -1,6 +1,9 @@
 import numpy as np
 from collections import defaultdict
 from random import randrange
+from scipy.stats import mode
+
+from segmentation import class_color
 
 class MapLandmarkBase:
     _id = 0
@@ -17,6 +20,7 @@ class MapLandmarkBase:
 
     def add_measurement(self, m):
         self.meas.append(m)
+        self.increase_measurement_count()
 
     def is_tracked(self):
         return self.count['meas'] > 1
@@ -58,6 +62,7 @@ class MapPoint(MapLandmarkBase):
         self.normal = normal
         self.descriptor = descriptor
         self.color = color
+        self.seg_classes = []
     
     def update_position(self, position):
         self.position = position
@@ -70,6 +75,23 @@ class MapPoint(MapLandmarkBase):
 
     def set_color(self, color):
         self.color = color
+
+    def add_seg_observation(self, seg):
+        self.seg_classes.append(seg)
+
+    def best_seg_color(self):
+        if len(self.seg_classes) == 0:
+            print('no color')
+            return self.color
+        best_class = mode(self.seg_classes)[0][0]
+        color255 = class_color(best_class)
+        return (color255[0] / 255, color255[1] / 255, color255[2] / 255)
+
+    def add_measurement(self, m):
+        super().add_measurement(m)
+        if m.seg_class is not None:
+            self.add_seg_observation(m.seg_class)
+
 
 
 class MapLine(MapLandmarkBase):
