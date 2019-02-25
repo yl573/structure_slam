@@ -367,7 +367,7 @@ class KeyFrame(StereoFrame):
     def __init__(self, stereo_frame):
         super().__init__(stereo_frame.left, stereo_frame.right)
 
-        self.classes, _ = segmentation.segment_image(stereo_frame.left.image)
+        # self.classes, _ = segmentation.segment_image(stereo_frame.left.image)
 
         self.meas = dict()
 
@@ -403,7 +403,8 @@ class KeyFrame(StereoFrame):
         measurements = []
         for mappoint, match in zip(mappoints, matches):
 
-            seg_class = segmentation.find_seg_class(self.classes, self.left.keypoints[match[0]])
+            # seg_class = segmentation.find_seg_class(self.classes, self.left.keypoints[match[0]])
+            seg_class = None
 
             meas = PointMeasurement(
                 MeasurementType.STEREO,

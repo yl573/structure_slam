@@ -76,6 +76,8 @@ class MapViewer(object):
         self.q_camera = Queue()
         self.q_image = Queue()
 
+        self.q_ground = Queue()
+
         # message queue
         self.q_refresh = Queue()
         # self.q_quit = Queue()
@@ -149,12 +151,15 @@ class MapViewer(object):
                 cameras.append(kf.pose.matrix())
             self.q_camera.put(cameras)
 
+            # mesh = self.system.map.compute_ground_mesh()
+            # self.q_ground.put(mesh)
 
             points = []
             colors = []
+            # for pt in self.system.map.mappoints():
             for pt in self.system.map.mappoints():
                 points.append(pt.position)
-                colors.append(pt.best_seg_color())
+                colors.append(pt.color)
             if len(points) > 0:
                 self.q_points.put((points, 0))
                 self.q_colors.put((colors, 0))
@@ -273,6 +278,7 @@ class MapViewer(object):
 
         active_lines = [] 
         line_colors = []   
+        gnd_mesh = None
 
         while not pangolin.ShouldQuit():
 
@@ -315,6 +321,14 @@ class MapViewer(object):
                 gl.glBegin(gl.GL_POINTS)
                 gl.glVertex3d(pose[0, 3], pose[1, 3], pose[2, 3])
                 gl.glEnd()
+
+            # if not self.q_ground.empty():
+            #     gnd_mesh = self.q_ground.get()
+
+            if gnd_mesh is not None:
+                gl.glLineWidth(2)
+                gl.glColor3f(0.5, 0.25, 0.5)
+                pangolin.DrawLines(gnd_mesh, 2)
 
 
             # Show mappoints

@@ -32,7 +32,7 @@ class Tracker(object):
         self.max_iterations = params.pnp_max_iterations
         self.timer = RunningAverageTimer()
 
-        self.lines = False
+        self.lines = True
 
     def initialize(self, frame):
         keyframe = frame.to_keyframe()
@@ -105,7 +105,11 @@ class Tracker(object):
         # Get mappoints and measurements take 0.013s
         local_mappoints = self.get_local_map_points(frame)
 
-        assert len(local_mappoints) > 0, 'local_mappoints cannot be empty'
+        print(local_mappoints)
+
+        if len(local_mappoints) == 0:
+            print('Nothing in local_mappoints! Exiting.')
+            exit()
 
         measurements = frame.match_mappoints(local_mappoints)
 
@@ -185,8 +189,9 @@ class Tracker(object):
         filtered = []
         # Add in map points from preceding and reference
         for pt in self.preceding.mappoints():  # neglect can_view test
-            if pt in checked or pt.is_bad():
-                continue
+            # if pt in checked or pt.is_bad():
+            #     print('bad')
+            #     continue
             pt.increase_projection_count()
             filtered.append(pt)
 

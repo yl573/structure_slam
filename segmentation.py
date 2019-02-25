@@ -7,8 +7,6 @@ import torchvision.transforms as standard_transforms
 import torchvision.transforms.functional as F
 import cv2
 
-# from matplotlib import pyplot as plt
-
 def class_color(id):
     return cfg.VIS.PALETTE_LABEL_COLORS[id]
 
@@ -21,7 +19,9 @@ class SegmentationModel:
 
         self.net = ENet(only_encode=True)
         # # encoder_weight = torch.load('./model/encoder_ep_497_mIoU_0.5098.pth', map_location='cpu')
-        encoder_weight = torch.load('/Users/yuxuanliu/Desktop/enet.pytorch/ckpt/kitti_checkpoint_19-02-20_07-59-33_encoder_ENet_city_[320, 640]_lr_0.0005.pth', map_location='cpu')
+        model_path = '/Users/yuxuanliu/Desktop/enet.pytorch/ckpt/kitti_checkpoint_19-02-19_22-04-01_encoder_ENet_city_[320, 640]_lr_0.0005.pth'
+        # model_path = '/Users/yuxuanliu/Desktop/enet.pytorch/ckpt/kitti_checkpoint_19-02-19_22-04-01_encoder_ENet_city_[320, 640]_lr_0.0005.pth'
+        encoder_weight = torch.load(model_path, map_location='cpu')
         self.net.encoder.load_state_dict(encoder_weight)     
 
         mean_std = cfg.DATA.MEAN_STD
@@ -54,19 +54,19 @@ class SegmentationModel:
 
         classes = classes.squeeze(0)
 
+        print(torch.sum(classes == 9))
+
         np_classes = classes.data.numpy()
         color_mask = colorize_mask(np_classes)
 
-        seg_img = np.asarray(color_mask)
-        seg_img = Image.fromarray(seg_img.astype(np.uint8)).resize((img.shape[1], img.shape[0]))
+        seg_img = color_mask / 255
+
+        seg_img_bgr = seg_img[:,:,::-1]
+        cv2.imshow('img', img)
+        cv2.imshow('seg', seg_img_bgr)
+        cv2.waitKey(1)
 
         return np_classes, seg_img
-
-        # plt.figure()
-        # plt.imshow(seg_img)
-        # plt.figure()
-        # plt.imshow(Image.fromarray(img.astype(np.uint8)))
-        # plt.show()
 
     def find_seg_class(self, class_mask, position):
         mask_height, mask_width = class_mask.shape
@@ -77,7 +77,7 @@ class SegmentationModel:
 
 
 def colorize_mask(mask):
-    color_mask = np.zeros((*mask.shape, 3), dtype=np.int)
+    color_mask = np.zeros((*mask.shape, 3), dtype=np.float)
     for i in range(19):
         color_mask[mask==i] = cfg.VIS.PALETTE_LABEL_COLORS[i]
 

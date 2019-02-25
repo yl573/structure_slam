@@ -79,12 +79,11 @@ class MapPoint(MapLandmarkBase):
     def add_seg_observation(self, seg):
         self.seg_classes.append(seg)
 
+    def best_seg(self):
+        return mode(self.seg_classes)[0][0]
+
     def best_seg_color(self):
-        if len(self.seg_classes) == 0:
-            print('no color')
-            return self.color
-        best_class = mode(self.seg_classes)[0][0]
-        color255 = class_color(best_class)
+        color255 = class_color(self.best_seg())
         return (color255[0] / 255, color255[1] / 255, color255[2] / 255)
 
     def add_measurement(self, m):
